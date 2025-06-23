@@ -1,0 +1,33 @@
+﻿<ContentPage
+    x:Class="ChessApp.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Chess">
+
+    <StackLayout>
+
+        <!-- Top Input Area -->
+        <StackLayout Orientation="Horizontal" Margin="10">
+            <Entry x:Name="UserInput" Text="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR" WidthRequest="300"/>
+            <Button Text="Set FEN" Clicked="orderInFenNotation"/>
+        </StackLayout>
+
+
+        <!-- Chess Grid Area -->
+        <Grid HorizontalOptions="Center" VerticalOptions="Center">
+            <Grid WidthRequest="{Binding Source={x:Reference ChessGrid}, Path=HeightRequest}">
+                <Grid x:Name="ChessGrid"
+                      RowSpacing="0"
+                      ColumnSpacing="0"
+                      Padding="0"
+                      VerticalOptions="Fill"
+                      HorizontalOptions="Fill"
+                      HeightRequest="400"
+                      WidthRequest="400">
+                    <!-- You will define 8x8 rows/cols in code or markup -->
+                </Grid>
+            </Grid>
+        </Grid>
+
+    </StackLayout>
+</ContentPage>
