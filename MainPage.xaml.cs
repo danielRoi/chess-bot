@@ -19,7 +19,7 @@ namespace ChessApp
         private List<(int row, int col)> _legal_moves;
         bool whiteTurn = true;
         bool BotPlay = true;
-        int botDepth = 4;
+        int botDepth = 5;
         public MainPage()
         {
             InitializeComponent();
@@ -184,7 +184,7 @@ namespace ChessApp
                 showEvaluation();
                 if (BotPlay)
                 {
-                    playBot();
+                    await playBotAsync();
                 }
 
                 //check for checkmate or stalemate
@@ -254,7 +254,7 @@ namespace ChessApp
         private void showEvaluation()
         {
             double score = Engine.Evaluate(whiteTurn);
-            EvalLabel.Text = $"Eval: {(score >= 0 ? "+" : "-")}{score:0.00}";
+            EvalLabel.Text = $"Eval: {(score >= 0 ? "+" : "-")}{score/1000:0.00}";
         }
         void RefreshBoardFromLogic()
         {
@@ -378,19 +378,26 @@ namespace ChessApp
             whiteTurn = !whiteTurn;
             _selected = null;
         }
-        void playBot()
+        async Task playBotAsync()
         {
-            var botMove = Engine.FindBestMove(botDepth, whiteTurn);
+            // Run engine calculation on background thread
+            var botMove = await Task.Run(() => Engine.FindBestMove(botDepth, whiteTurn));
+
+            // Extract move details
             int from = (botMove >> 24) & 0x7F;
             int to = (botMove >> 17) & 0x7F;
             int promo = (botMove >> 15) & 0x3;
 
             int fr = from / 8, fc = from % 8;
             int tr = to / 8, tc = to % 8;
-            movePiece(fr, fc, tr, tc, promo == 1 ? Piece.Queen :
-            promo == 2 ? Piece.Rook :
-            promo == 3 ? Piece.Bishop :
-            promo == 4 ? Piece.Knight : Piece.None);
+
+            // Apply the move on UI thread
+            movePiece(fr, fc, tr, tc,
+                promo == 1 ? Piece.Queen :
+                promo == 2 ? Piece.Rook :
+                promo == 3 ? Piece.Bishop :
+                promo == 4 ? Piece.Knight :
+                Piece.None);
         }
     }
 }
