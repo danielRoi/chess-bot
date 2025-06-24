@@ -164,6 +164,48 @@ namespace ChessApp
             ulong fromBB = 1UL << fSq;
             ulong toBB = 1UL << tSq;
 
+            #region enPassant
+            //check for en passant capture
+            if (enPassantSquare.HasValue && toBB == enPassantSquare)
+            {
+                // en passant capture
+                if ((fromBB & WP) != 0) // white pawn captures
+                {
+                    WP &= ~fromBB;
+                    BP &= ~enPassantSquare.Value << 8; // remove black pawn
+                    WP |= toBB;
+                    enPassantSquare = null; // reset en passant
+                    return 3;
+
+                }
+                else if ((fromBB & BP) != 0) // black pawn captures
+                {
+                    BP &= ~fromBB;
+                    BP |= toBB;
+                    WP &= ~enPassantSquare.Value >> 8; // remove white pawn
+                    enPassantSquare = null; // reset en passant
+                    return 3;
+
+                }
+            }
+
+            //if the move is pawn advancement, save for en passant
+            if ((fromBB & WP) != 0 && (toBB << 16) == fromBB)
+            {
+                // white pawn moved two squares forward
+                enPassantSquare = toBB << 8;
+            }
+            else if ((fromBB & BP) != 0 && (toBB >> 16) == fromBB)
+            {
+                // black pawn moved two squares forward
+                enPassantSquare = toBB >> 8;
+            }
+            else
+            {
+                enPassantSquare = null; // reset en passant if not a pawn double push
+            }
+            #endregion
+
 
             //castle data update
             if ((fromBB & WK) != 0) castleData |= 0b00000001; // white king moved
@@ -208,45 +250,6 @@ namespace ChessApp
                     BR |= (toBB << 1);
                     return 2; //castle left
                 }
-            }
-
-            //check for en passant capture
-            if (enPassantSquare.HasValue && toBB == enPassantSquare)
-            {
-                // en passant capture
-                if ((fromBB & WP) != 0) // white pawn captures
-                {
-                    WP &= ~fromBB;
-                    BP &= ~enPassantSquare.Value << 8; // remove black pawn
-                    WP |= toBB;
-                    return 3;
-
-                }
-                else if ((fromBB & BP) != 0) // black pawn captures
-                {
-                    BP &= ~fromBB;
-                    BP |= toBB;
-                    WP &= ~enPassantSquare.Value >> 8; // remove white pawn
-                    return 3;
-
-                }
-            }
-
-
-            //if the move is pawn advancement, save for en passant
-            if ((fromBB & WP) != 0 && (toBB << 16) == fromBB)
-            {
-                // white pawn moved two squares forward
-                enPassantSquare = toBB << 8;
-            }
-            else if ((fromBB & BP) != 0 && (toBB >> 16) == fromBB)
-            {
-                // black pawn moved two squares forward
-                enPassantSquare = toBB >> 8;
-            }
-            else
-            {
-                enPassantSquare = null; // reset en passant if not a pawn double push
             }
 
             // remove any captured piece
@@ -496,22 +499,22 @@ namespace ChessApp
                     }
                 }
             }
-
-            if (parts.Length > 2 && parts[2] != "-")
+            bool whiteTurn = parts[1] == "w";
+            if (parts.Length > 1)
             {
-                int file = parts[2][0] - 'a';
-                int rank = parts[2][1] - '1';
+                string castling = parts[2];
+                if (!castling.Contains("K")) castleData |= 0b00000011;
+                if (!castling.Contains("Q")) castleData |= 0b00000101;
+                if (!castling.Contains("k")) castleData |= 0b00011000;
+                if (!castling.Contains("q")) castleData |= 0b00101000;
+            }
+            if (parts.Length > 2 && parts[3] != "-")
+            {
+                int file = parts[3][0] - 'a';
+                int rank = 7 - (parts[3][1] - '1');
                 enPassantSquare = 1UL << (rank * 8 + file);
             }
 
-            if (parts.Length > 1)
-            {
-                string castling = parts[1];
-                if (castling.Contains("K")) castleData |= 0b00000011;
-                if (castling.Contains("Q")) castleData |= 0b00000101;
-                if (castling.Contains("k")) castleData |= 0b00011000;
-                if (castling.Contains("q")) castleData |= 0b00101000;
-            }
         }
 
         public static string GetFENFromCurrentPosition(bool whiteTurn)
