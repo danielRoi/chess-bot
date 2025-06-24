@@ -259,14 +259,14 @@ namespace ChessApp.Logic
                 int corner4 = (7 - blackKingX) + (7 - blackKingY);
                 minCornerDistance = Math.Min(Math.Min(corner1, corner2), Math.Min(corner3, corner4));
             }
-            int cornerScore = (14 - minCornerDistance) * 20; // Max value when in a corner
+            int cornerScore = (14 - minCornerDistance) * 5; // Max value when in a corner
 
             // 2. Bring white king close to black king
             int dx = Math.Abs(whiteKingX - blackKingX);
             int dy = Math.Abs(whiteKingY - blackKingY);
-            int distanceScore = (14 - (dx + dy)) * 10;
+            int distanceScore = (14 - (dx + dy)) * 3;
 
-            int res = (cornerScore + distanceScore) * 5;
+            int res = (cornerScore + distanceScore) * 3;
             return whiteTurn ? res : -res; // Return positive for white's perspective, negative for black
         }
 
