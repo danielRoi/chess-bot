@@ -8,7 +8,7 @@ namespace ChessApp
 
     static class ChessLogic
     {
-        public enum Piece { Pawn, Knight, Bishop, Rook, Queen, King, None};
+        public enum Piece { Pawn, Knight, Bishop, Rook, Queen, King, None };
         // bitboards for each piece type
         public static ulong WP, WN, WB, WR, WQ, WK;
         public static ulong BP, BN, BB, BR, BQ, BK;
@@ -20,8 +20,8 @@ namespace ChessApp
 
         // direction offsets in bits
         private const int Up = 8, Down = -8, Right = +1, Left = -1,
-                          UR = Up + Right, UL = Up + Left,
-                          DR = Down + Right, DL = Down + Left;
+                            UR = Up + Right, UL = Up + Left,
+                            DR = Down + Right, DL = Down + Left;
 
         // file masks to prevent wraparound
         private const ulong FileA = 0x0101010101010101UL;
@@ -268,16 +268,16 @@ namespace ChessApp
             else if ((BK & fromBB) != 0) { BK &= ~fromBB; BK |= toBB; }
 
             //check if the move was a promotion
-            if ((WP & toBB) != 0 && (toBB & 0x00000000000000FFUL) != 0)
+            if ((WP & toBB) != 0 && (tr == 0)) // FIX: White pawn promotion rank is 0 in this board representation (rank 8)
             {
                 WP &= ~toBB;
-                if(promoteTo == Piece.Queen) WQ |= toBB;
-                if(promoteTo == Piece.Knight) WN |= toBB;
-                if(promoteTo == Piece.Rook) WR |= toBB;
-                if(promoteTo == Piece.Bishop) WB |= toBB;
+                if (promoteTo == Piece.Queen) WQ |= toBB;
+                if (promoteTo == Piece.Knight) WN |= toBB;
+                if (promoteTo == Piece.Rook) WR |= toBB;
+                if (promoteTo == Piece.Bishop) WB |= toBB;
                 return 4;
             }
-            else if ((BP & toBB) != 0 && (toBB & 0xFF00000000000000UL) != 0)
+            else if ((BP & toBB) != 0 && (tr == 7)) // FIX: Black pawn promotion rank is 7 in this board representation (rank 1)
             {
                 BP &= ~toBB;
                 if (promoteTo == Piece.Queen) BQ |= toBB;
@@ -293,17 +293,14 @@ namespace ChessApp
         private static ulong computeKnightAttack(ulong k)
         {
             ulong moves = 0UL;
-            moves |= ((k >> 15) & ~FileA); // top left
-            moves |= ((k >> 17) & ~FileH); // top right
-
-            moves |= (k << 15) & ~FileH; // down left
-            moves |= (k << 17) & ~FileA; // down right
-
-            moves |= (k << 6) & ~FileH & ~FileG; // middle top left
-            moves |= (k << 10) & ~FileA & ~FileB; // middle top right
-
-            moves |= (k >> 6) & ~FileB & ~FileA; // middle down left
-            moves |= (k >> 10) & ~FileG & ~FileH; // middle down right
+            moves |= (k << 17) & ~FileA;
+            moves |= (k << 15) & ~FileH;
+            moves |= (k << 10) & ~(FileA | FileB);
+            moves |= (k << 6) & ~(FileH | FileG);
+            moves |= (k >> 17) & ~FileH;
+            moves |= (k >> 15) & ~FileA;
+            moves |= (k >> 10) & ~(FileH | FileG);
+            moves |= (k >> 6) & ~(FileA | FileB);
             return moves;
         }
         private static ulong computeKingAttack(ulong k)
@@ -313,16 +310,16 @@ namespace ChessApp
             ulong notFileH = ~FileH;
 
             // vertical and horizontal
-            attacks |= (k << 8);                    // up
-            attacks |= (k >> 8);                    // down
-            attacks |= (k << 1) & notFileA;         // right
-            attacks |= (k >> 1) & notFileH;         // left
+            attacks |= (k << 8);                     // up
+            attacks |= (k >> 8);                     // down
+            attacks |= (k << 1) & notFileA;      // right
+            attacks |= (k >> 1) & notFileH;      // left
 
             // diagonals
-            attacks |= (k << 9) & notFileA;         // up-right
-            attacks |= (k << 7) & notFileH;         // up-left
-            attacks |= (k >> 7) & notFileA;         // down-right
-            attacks |= (k >> 9) & notFileH;         // down-left
+            attacks |= (k << 9) & notFileA;      // up-right
+            attacks |= (k << 7) & notFileH;      // up-left
+            attacks |= (k >> 7) & notFileA;      // down-right
+            attacks |= (k >> 9) & notFileH;      // down-left
 
             return attacks;
         }
@@ -336,7 +333,7 @@ namespace ChessApp
                 KingMoves[i] = computeKingAttack(k);
             }
         }
-        
+
         // —— attack generators ——
 
         private static ulong PawnMoves(ulong p, bool white)
@@ -349,11 +346,11 @@ namespace ChessApp
                 moves |= one;
                 // capture
                 moves |= ((p >> 7) & ~FileA & BlackAll)
-                      | ((p >> 9) & ~FileH & BlackAll);
+                       | ((p >> 9) & ~FileH & BlackAll);
                 moves |= (0x000000FF00000000UL & (p >> 16)) & ~occ & ~(occ >> 8); // double push
 
                 //en passant capture
-                if (enPassantSquare.HasValue && (((enPassantSquare.Value << 7 == p) && (p & ~FileH) != 0)|| (((enPassantSquare.Value << 9 == p) && (p & ~FileA) != 0))))
+                if (enPassantSquare.HasValue && (((enPassantSquare.Value << 7 == p) && (p & ~FileH) != 0) || (((enPassantSquare.Value << 9 == p) && (p & ~FileA) != 0))))
                 {
                     // en passant capture
                     moves |= (enPassantSquare.Value);
@@ -365,7 +362,7 @@ namespace ChessApp
                 moves |= one;
 
                 moves |= ((p << 7) & ~FileH & WhiteAll)
-                      | ((p << 9) & ~FileA & WhiteAll);
+                       | ((p << 9) & ~FileA & WhiteAll);
                 moves |= (0x00000000FF000000UL & (p << 16)) & ~occ & ~(occ << 8); // double push
 
                 //en passant capture
@@ -387,20 +384,20 @@ namespace ChessApp
             ulong moves = 0UL;
             if ((k & WK) != 0)
             {
-                if ((~(castleData << 1) & ~castleData & 0b00000010) != 0 && !isPieceUnderAttack(k, true) && !isPieceUnderAttack(k << 1, true) && ((k << 1 & Occupied) == 0)) moves |= (k << 2); // white king can castle right
-                if ((~(castleData << 2) & ~castleData & 0b00000100) != 0 && !isPieceUnderAttack(k, true) && !isPieceUnderAttack(k >> 1, true) && ((k >> 1 & Occupied) == 0) && ((k >> 3 & Occupied) == 0)) moves |= (k >> 2); // white king can castle left
+                if ((~(castleData << 1) & ~castleData & 0b00000010) != 0 && !isPieceUnderAttack(k, true) && !isPieceUnderAttack(k << 1, true) && ((k << 1 & Occupied) == 0) && ((k << 2 & Occupied) == 0)) moves |= (k << 2); // white king can castle right
+                if ((~(castleData << 2) & ~castleData & 0b00000100) != 0 && !isPieceUnderAttack(k, true) && !isPieceUnderAttack(k >> 1, true) && ((k >> 1 & Occupied) == 0) && ((k >> 2 & Occupied) == 0) && ((k >> 3 & Occupied) == 0)) moves |= (k >> 2); // white king can castle left
             }
             else
             {
-                if ((~(castleData << 1) & ~castleData & 0b00010000) != 0 && !isPieceUnderAttack(k, false) && !isPieceUnderAttack(k << 1, false) && ((k << 1 & Occupied) == 0)) moves |= (k << 2); // white king can castle right
-                if ((~(castleData << 2) & ~castleData & 0b00100000) != 0 && !isPieceUnderAttack(k, false) && !isPieceUnderAttack(k >> 1, false) && ((k >> 1 & Occupied) == 0) && ((k >> 3 & Occupied) == 0)) moves |= (k >> 2); // white king can castle left
+                if ((~(castleData << 1) & ~castleData & 0b00010000) != 0 && !isPieceUnderAttack(k, false) && !isPieceUnderAttack(k << 1, false) && ((k << 1 & Occupied) == 0) && ((k << 2 & Occupied) == 0)) moves |= (k << 2); // black king can castle right
+                if ((~(castleData << 2) & ~castleData & 0b00100000) != 0 && !isPieceUnderAttack(k, false) && !isPieceUnderAttack(k >> 1, false) && ((k >> 1 & Occupied) == 0) && ((k >> 2 & Occupied) == 0) && ((k >> 3 & Occupied) == 0)) moves |= (k >> 2); // black king can castle left
             }
             return moves;
         }
 
         private static ulong RookAttacks(ulong r)
             => Slide(r, Up) | Slide(r, Down)
-                         | Slide(r, Right) | Slide(r, Left);
+                             | Slide(r, Right) | Slide(r, Left);
 
         private static ulong BishopAttacks(ulong b)
             => Slide(b, UR) | Slide(b, DL) | Slide(b, UL) | Slide(b, DR);
@@ -453,7 +450,7 @@ namespace ChessApp
             else if ((BB & srcLoc) != 0) return (false, Piece.Bishop);
             else if ((WR & srcLoc) != 0) return (true, Piece.Rook);
             else if ((BR & srcLoc) != 0) return (false, Piece.Rook);
-            else if ((WQ & srcLoc) != 0) return (true, Piece.Queen); 
+            else if ((WQ & srcLoc) != 0) return (true, Piece.Queen);
             else if ((BQ & srcLoc) != 0) return (false, Piece.Queen);
             else if ((WK & srcLoc) != 0) return (true, Piece.King);
             else if ((BK & srcLoc) != 0) return (false, Piece.King);
@@ -510,10 +507,10 @@ namespace ChessApp
             if (parts.Length > 1)
             {
                 string castling = parts[1];
-                if (!castling.Contains("K")) castleData |= 0b00000010;
-                if (!castling.Contains("Q")) castleData |= 0b00000100;
-                if (!castling.Contains("k")) castleData |= 0b00010000;
-                if (!castling.Contains("q")) castleData |= 0b00100000;
+                if (castling.Contains("K")) castleData |= 0b00000011;
+                if (castling.Contains("Q")) castleData |= 0b00000101;
+                if (castling.Contains("k")) castleData |= 0b00011000;
+                if (castling.Contains("q")) castleData |= 0b00101000;
             }
         }
 
@@ -577,17 +574,18 @@ namespace ChessApp
 
         /// <summary>
         /// Generates all legal moves for the current board position, encoded as 32-bit integers.
-        /// Each move is encoded with the following bit layout:
         /// 
+        /// FIX: Updated the comment to reflect the new, non-conflicting bit layout.
         /// Bit layout (from most to least significant):
         /// ┌────────┬────────────┬────────────┬────────────┐
-        /// │ Bit 31 │ Bits 30–24 │ Bits 23–17 │ Bits 16–15 │
+        /// │ Bit 31 │ Bits 30-24 │ Bits 23-17 │ Bits 14-12 │
         /// └────────┴────────────┴────────────┴────────────┘
-        /// │ Color  │ From Square│ To Square  │ Promotion   │
-        /// │ 0=White│ (0–63)     │ (0–63)     │ 00=None     │
-        /// │ 1=Black│            │            │ 01=Queen    │
-        /// │        │            │            │ 10=Rook     │
-        /// │        │            │            │ 11=Bishop   │
+        /// │ Color  │ From Square│ To Square  │ Promotion  │
+        /// │ 0=White│ (0-63)     │ (0-63)     │ 000=None   │
+        /// │ 1=Black│            │            │ 001=Queen  │
+        /// │        │            │            │ 010=Rook   │
+        /// │        │            │            │ 011=Bishop │
+        /// │        │            │            │ 100=Knight │
         /// └────────┴────────────┴────────────┴────────────┘
         /// </summary>
         /// <param name="whiteTurn">Indicates whether it is white's turn</param>
@@ -614,18 +612,20 @@ namespace ChessApp
 
                         // Start encoding
                         int colorBit = 0;
-                        int move = (colorBit << 31)             // bit 31
-                                 | ((from & 0x7F) << 24)         // bits 30–24
-                                 | ((to & 0x7F) << 17);          // bits 23–17
+                        int move = (colorBit << 31)           // bit 31
+                                 | ((from & 0x7F) << 24)      // bits 30-24
+                                 | ((to & 0x7F) << 17);       // bits 23-17
 
                         // Handle promotion
-                        if ((p & WP) != 0 && (tr == 0 || tr == 7))
+                        if ((p & WP) != 0 && (tr == 0)) // Promotion occurs on rank 8 (row 0 in our 0-7 model)
                         {
-                            // Add four promotion options: 01 = Q, 10 = R, 11 = B, 00 = N
-                            allMoves.Add(move | (0b01 << 15)); // Queen
-                            allMoves.Add(move | (0b10 << 15)); // Rook
-                            allMoves.Add(move | (0b11 << 15)); // Bishop
-                            allMoves.Add(move | (0b00 << 15)); // Knight (or none)
+                            // FIX: Use bits 12-14 for promotion to avoid collision with the 'to' square data.
+                            // The previous shift (<< 15) caused bit 17 to be used for knight promotion,
+                            // which conflicts with bit 17 being used for the 'to' square.
+                            allMoves.Add(move | (0b001 << 12)); // Queen
+                            allMoves.Add(move | (0b010 << 12)); // Rook
+                            allMoves.Add(move | (0b011 << 12)); // Bishop
+                            allMoves.Add(move | (0b100 << 12)); // Knight
                         }
                         else
                         {
@@ -654,18 +654,18 @@ namespace ChessApp
 
                         // Start encoding
                         int colorBit = 1;
-                        int move = (colorBit << 31)             // bit 31
-                                 | ((from & 0x7F) << 24)         // bits 30–24
-                                 | ((to & 0x7F) << 17);          // bits 23–17
+                        int move = (colorBit << 31)           // bit 31
+                                 | ((from & 0x7F) << 24)      // bits 30-24
+                                 | ((to & 0x7F) << 17);       // bits 23-17
 
                         // Handle promotion
-                        if ((p & BP) != 0 && (tr == 0 || tr == 7))
+                        if ((p & BP) != 0 && (tr == 7)) // Promotion occurs on rank 1 (row 7 in our 0-7 model)
                         {
-                            // Add four promotion options: 01 = Q, 10 = R, 11 = B, 00 = N
-                            allMoves.Add(move | (0b01 << 15)); // Queen
-                            allMoves.Add(move | (0b10 << 15)); // Rook
-                            allMoves.Add(move | (0b11 << 15)); // Bishop
-                            allMoves.Add(move | (0b00 << 15)); // Knight (or none)
+                            // FIX: Use bits 12-14 for promotion.
+                            allMoves.Add(move | (0b001 << 12)); // Queen
+                            allMoves.Add(move | (0b010 << 12)); // Rook
+                            allMoves.Add(move | (0b011 << 12)); // Bishop
+                            allMoves.Add(move | (0b100 << 12)); // Knight
                         }
                         else
                         {
@@ -699,17 +699,22 @@ namespace ChessApp
                 bool color = ((move >> 31) & 1) == 1;
                 int fromSq = (move >> 24) & 0x7F;
                 int toSq = (move >> 17) & 0x7F;
-                int promo = (move >> 15) & 0x3;
+
+                // FIX: Decode promotion from bits 12-14 using a 3-bit mask (0x7).
+                // The original code `& 0x4` only checked for one specific bit, which was
+                // also part of the 'to' square data, causing incorrect promotion flagging.
+                int promo = (move >> 12) & 0x7;
 
                 int fr = fromSq / 8, fc = fromSq % 8;
                 int tr = toSq / 8, tc = toSq % 8;
                 var lastSavedState = SaveState(); // Save current state before making the move
+
                 // Execute move (updates board state)
                 MovePiece(fr, fc, tr, tc,
                     promo == 1 ? Piece.Queen :
                     promo == 2 ? Piece.Rook :
                     promo == 3 ? Piece.Bishop :
-                    Piece.Knight);
+                    promo == 4 ? Piece.Knight : Piece.None);
 
                 // Recurse
                 nodes += Perfit(depth - 1, !whiteTurn);
@@ -749,7 +754,9 @@ namespace ChessApp
                 // Decode move info
                 int from = (move >> 24) & 0x7F;
                 int to = (move >> 17) & 0x7F;
-                int promo = (move >> 15) & 0x3;
+
+                // FIX: Decode promotion from bits 12-14 using a 3-bit mask (0x7).
+                int promo = (move >> 12) & 0x7;
 
                 int fr = from / 8, fc = from % 8;
                 int tr = to / 8, tc = to % 8;
@@ -763,6 +770,8 @@ namespace ChessApp
                         1 => "q",
                         2 => "r",
                         3 => "b",
+                        // FIX: A promotion to knight should be 'n', not 'b'.
+                        4 => "n",
                         _ => ""
                     };
                 }
@@ -771,7 +780,7 @@ namespace ChessApp
                     promo == 1 ? Piece.Queen :
                     promo == 2 ? Piece.Rook :
                     promo == 3 ? Piece.Bishop :
-                    Piece.Knight);
+                    promo == 4 ? Piece.Knight : Piece.None);
 
                 PerftRecursive(depth - 1, !whiteTurn, moveHistory + moveStr + " ", writer);
 
@@ -780,13 +789,12 @@ namespace ChessApp
         }
 
         /// <summary>
-        /// Converts a square index (0–63) to algebraic notation (e.g., 0 → a1, 63 → h8).
-        /// </summary>
-        private static string SquareToAlgebraic(int square)
+        /// Converts a square index (0–63) to algebraic notation (e.g.,
+        public static string SquareToAlgebraic(int sq)
         {
-            int file = square % 8;
-            int rank = 7 - (square / 8);
-            return $"{(char)('a' + file)}{1 + rank}";
+            int file = sq % 8;
+            int rank = sq / 8;
+            return $"{(char)('a' + file)}{7 - rank + 1}";
         }
     }
 }

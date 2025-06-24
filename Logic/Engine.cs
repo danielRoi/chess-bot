@@ -7,6 +7,7 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Devices.Midi;
+using static ChessApp.ChessLogic;
 
 namespace ChessApp.Logic
 {
@@ -109,8 +110,11 @@ namespace ChessApp.Logic
                 // Decode and make the move
                 int fromSq = (move >> 24) & 0x7F;
                 int toSq = (move >> 17) & 0x7F;
-                int promo = (move >> 15) & 0x3;
-                ChessLogic.MovePiece(fromSq / 8, fromSq % 8, toSq / 8, toSq % 8, (ChessLogic.Piece)promo);
+                int promo = (move >> 12) & 0x7;
+                ChessLogic.MovePiece(fromSq / 8, fromSq % 8, toSq / 8, toSq % 8, promo == 1 ? Piece.Queen :
+                                                                                 promo == 2 ? Piece.Rook :
+                                                                                 promo == 3 ? Piece.Bishop :
+                                                                                 promo == 4 ? Piece.Knight : Piece.None);
 
                 // Start the search
                 int score = minimax(depth - 1, int.MinValue, int.MaxValue, !whiteTurn);
@@ -163,8 +167,11 @@ namespace ChessApp.Logic
                     var savedState = ChessLogic.SaveState();
                     int fromSq = (move >> 24) & 0x7F;
                     int toSq = (move >> 17) & 0x7F;
-                    int promo = (move >> 15) & 0x3;
-                    ChessLogic.MovePiece(fromSq / 8, fromSq % 8, toSq / 8, toSq % 8, (ChessLogic.Piece)promo);
+                    int promo = (move >> 12) & 0x7;
+                    ChessLogic.MovePiece(fromSq / 8, fromSq % 8, toSq / 8, toSq % 8, promo == 1 ? Piece.Queen :
+                                                                                     promo == 2 ? Piece.Rook :
+                                                                                     promo == 3 ? Piece.Bishop :
+                                                                                     promo == 4 ? Piece.Knight : Piece.None);
 
                     int eval = minimax(depth - 1, alpha, beta, false);
                     ChessLogic.RestoreState(savedState);
@@ -184,8 +191,11 @@ namespace ChessApp.Logic
                     var savedState = ChessLogic.SaveState();
                     int fromSq = (move >> 24) & 0x7F;
                     int toSq = (move >> 17) & 0x7F;
-                    int promo = (move >> 15) & 0x3;
-                    ChessLogic.MovePiece(fromSq / 8, fromSq % 8, toSq / 8, toSq % 8, (ChessLogic.Piece)promo);
+                    int promo = (move >> 12) & 0x7;
+                    ChessLogic.MovePiece(fromSq / 8, fromSq % 8, toSq / 8, toSq % 8, promo == 1 ? Piece.Queen :
+                                                                                     promo == 2 ? Piece.Rook :
+                                                                                     promo == 3 ? Piece.Bishop :
+                                                                                     promo == 4 ? Piece.Knight : Piece.None);
 
                     int eval = minimax(depth - 1, alpha, beta, true);
                     ChessLogic.RestoreState(savedState);
