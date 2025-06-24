@@ -1,5 +1,7 @@
-﻿using System;
+﻿using Microsoft.UI.Xaml.Documents;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -90,6 +92,8 @@ namespace ChessApp.Logic
          20,  20,   0,   0,   0,   0,  20,  20,
          20,  30,  10,   0,   0,  10,  30,  20
         };
+
+
         #endregion
 
         public static int FindBestMove(int depth, bool whiteTurn)
@@ -141,7 +145,7 @@ namespace ChessApp.Logic
             if (depth == 0)
             {
                 // When search depth is reached, evaluate the board position
-                return Evaluate();
+                return Evaluate(whiteTurn);
             }
 
             var moves = ChessLogic.getAllAvailableMoves(whiteTurn);
@@ -201,7 +205,7 @@ namespace ChessApp.Logic
         /// Positive score favors white, negative favors black.
         /// NOTE: This requires access to the bitboards in ChessLogic. They must be made public or accessible via a public method.
         /// </summary>
-        private static int Evaluate()
+        public static int Evaluate(bool whiteTurn)
         {
             int score = 0;
             
@@ -218,8 +222,62 @@ namespace ChessApp.Logic
             score -= CalculateScoreForPiece(ChessLogic.BR, RookValue, RookPST, false);
             score -= CalculateScoreForPiece(ChessLogic.BQ, QueenValue, QueenPST, false);
             score -= CalculateScoreForPiece(ChessLogic.BK, KingValue, KingPST, false);
-            
-            return score;
+
+            int endGameScore = evaluateEndGame(whiteTurn);
+            return score + endGameScore;
+        }
+
+
+        private static int evaluateEndGame(bool whiteTurn)
+        {
+            if (!IsEndgame()) return 0;
+
+            int whiteKingSquare = BitOperations.TrailingZeroCount(ChessLogic.WK);
+            int blackKingSquare = BitOperations.TrailingZeroCount(ChessLogic.BK);
+
+            int whiteKingX = whiteKingSquare % 8;
+            int whiteKingY = whiteKingSquare / 8;
+
+            int blackKingX = blackKingSquare % 8;
+            int blackKingY = blackKingSquare / 8;
+
+            // 1. Push black king toward corner (distance to closest corner)
+            int minCornerDistance = 0;
+            if (!whiteTurn)
+            {
+                int corner1 = whiteKingX + whiteKingY;
+                int corner2 = whiteKingX + (7 - whiteKingY);
+                int corner3 = (7 - whiteKingX) + whiteKingY;
+                int corner4 = (7 - whiteKingX) + (7 - whiteKingY);
+                minCornerDistance = Math.Min(Math.Min(corner1, corner2), Math.Min(corner3, corner4));
+            }
+            else
+            {
+                int corner1 = blackKingX + blackKingY;
+                int corner2 = blackKingX + (7 - blackKingY);
+                int corner3 = (7 - blackKingX) + blackKingY;
+                int corner4 = (7 - blackKingX) + (7 - blackKingY);
+                minCornerDistance = Math.Min(Math.Min(corner1, corner2), Math.Min(corner3, corner4));
+            }
+            int cornerScore = (14 - minCornerDistance) * 20; // Max value when in a corner
+
+            // 2. Bring white king close to black king
+            int dx = Math.Abs(whiteKingX - blackKingX);
+            int dy = Math.Abs(whiteKingY - blackKingY);
+            int distanceScore = (14 - (dx + dy)) * 10;
+
+            int res = (cornerScore + distanceScore) * 5;
+            return whiteTurn ? res : -res; // Return positive for white's perspective, negative for black
+        }
+
+        private static bool IsEndgame()
+        {
+            int totalNonPawnMaterial = BitOperations.PopCount(ChessLogic.WQ | ChessLogic.BQ) * QueenValue;
+            totalNonPawnMaterial += BitOperations.PopCount(ChessLogic.WR | ChessLogic.BR) * RookValue;
+            totalNonPawnMaterial += BitOperations.PopCount(ChessLogic.WB | ChessLogic.BB) * BishopValue;
+            totalNonPawnMaterial += BitOperations.PopCount(ChessLogic.WN | ChessLogic.BN) * KnightValue;
+
+            return totalNonPawnMaterial <= 1300;
         }
 
         /// <summary>

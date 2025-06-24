@@ -19,7 +19,7 @@ namespace ChessApp
         private List<(int row, int col)> _legal_moves;
         bool whiteTurn = true;
         bool BotPlay = true;
-        int botDepth = 5;
+        int botDepth = 4;
         public MainPage()
         {
             InitializeComponent();
@@ -181,11 +181,26 @@ namespace ChessApp
                     }
                     return; // Exit the method after displaying the alert
                 }
-
-                if(BotPlay)
+                showEvaluation();
+                if (BotPlay)
                 {
                     playBot();
                 }
+
+                //check for checkmate or stalemate
+                if (ChessLogic.getAllAvailableMoves(whiteTurn).Count == 0)
+                {
+                    if (ChessLogic.IsInCheck(whiteTurn))
+                    {
+                        await DisplayAlert("Game Over", whiteTurn ? "Black wins!" : "White wins!", "OK");
+                    }
+                    else
+                    {
+                        await DisplayAlert("Game Over", "Stalemate!", "OK");
+                    }
+                    return; // Exit the method after displaying the alert
+                }
+                showEvaluation();
             }
         }
 
@@ -231,6 +246,16 @@ namespace ChessApp
             }
         }
 
+
+        async private void copyPosition(object sender, EventArgs e)
+        {
+            await Clipboard.SetTextAsync(ChessLogic.GetFENFromCurrentPosition(whiteTurn));
+        }
+        private void showEvaluation()
+        {
+            double score = Engine.Evaluate(whiteTurn);
+            EvalLabel.Text = $"Eval: {(score >= 0 ? "+" : "-")}{score:0.00}";
+        }
         void RefreshBoardFromLogic()
         {
             for (int r = 0; r < BoardSize; r++)

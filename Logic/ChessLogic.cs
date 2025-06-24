@@ -517,16 +517,16 @@ namespace ChessApp
             }
         }
 
-        public static (bool whiteToMove, string fen) GetFENFromCurrentPosition()
+        public static string GetFENFromCurrentPosition(bool whiteTurn)
         {
             string[] boardRows = new string[8];
-            for (int r = 0; r < 8; r++)
+            for (int r = 0; r < 8; r++)  // rank 8 to 1
             {
                 string row = "";
                 int empty = 0;
                 for (int c = 0; c < 8; c++)
                 {
-                    int idx = (7 - r) * 8 + c;
+                    int idx = r * 8 + c;
                     ulong mask = 1UL << idx;
                     char? piece = null;
 
@@ -569,9 +569,12 @@ namespace ChessApp
                 ep = $"{(char)('a' + epIdx % 8)}{1 + epIdx / 8}";
             }
 
-            return (true, $"{string.Join("/", boardRows)} {castling} {ep}"); // You can add halfmove/fullmove counters later
+            int halfmoveClock = 0;   // Replace with your actual value
+            int fullmoveNumber = 1;  // Replace with your actual value
+
+            return $"{string.Join("/", boardRows)} {(whiteTurn ? "w" : "b")} {castling} {ep} {halfmoveClock} {fullmoveNumber}";
         }
-        
+
         /// <summary>
         /// Generates all legal moves for the current board position, encoded as 32-bit integers.
         /// Each move is encoded with the following bit layout:
