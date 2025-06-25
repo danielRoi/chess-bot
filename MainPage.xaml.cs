@@ -18,7 +18,7 @@ namespace ChessApp
         private (int row, int col)? _selected;
         private List<(int row, int col)> _legal_moves;
         bool whiteTurn = true;
-        bool BotPlay = false;
+        bool BotPlay = true;
         int botDepth = 4;
         public MainPage()
         {
@@ -29,7 +29,7 @@ namespace ChessApp
             {
                 //ChessLogic.SetPositionFromFEN("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 \r\n");
                 //RefreshBoardFromLogic();
-                testPrefit();
+                //testPrefit();
                 //ChessLogic.PerftWithLogging(5, true, "perfit/prefit_log1.txt"); // Run Perft with logging for depth 5
             }
 
@@ -168,7 +168,7 @@ namespace ChessApp
                 movePiece(sr, sc, row, col, promotedPiece);
 
                 //check for checkmate or stalemate
-                if (ChessLogic.getAllAvailableMoves(whiteTurn).Count == 0)
+                if (ChessLogic.isGameOver(whiteTurn))
                 {
                     if (ChessLogic.IsInCheck(whiteTurn))
                     {
@@ -187,7 +187,7 @@ namespace ChessApp
                 }
 
                 //check for checkmate or stalemate
-                if (ChessLogic.getAllAvailableMoves(whiteTurn).Count == 0)
+                if (ChessLogic.isGameOver(whiteTurn))
                 {
                     if (ChessLogic.IsInCheck(whiteTurn))
                     {
@@ -232,10 +232,11 @@ namespace ChessApp
             return await selectionPage.GetSelectionAsync();
         }
 
-        private void orderInFenNotation(object sender, EventArgs e)
+        private async void orderInFenNotation(object sender, EventArgs e)
         {
             string inputText = UserInput.Text.Trim();
-            whiteTurn = true;
+            whiteTurn = inputText.Split(" ")[1] == "w";
+            if (!whiteTurn && BotPlay) await playBotAsync();
             _selected = null;
             clearAllHighlights(); // Clear any existing highlights before setting a new position
             if (!string.IsNullOrEmpty(inputText))
@@ -253,7 +254,7 @@ namespace ChessApp
         private void showEvaluation()
         {
             double score = Engine.Evaluate(whiteTurn);
-            EvalLabel.Text = $"Eval: {(score >= 0 ? "+" : "")}{score/1000:0.00}";
+            EvalLabel.Text = $"Eval: {(score >= 0 ? "+" : "")}{score / 1000:0.00}";
         }
 
         void RefreshBoardFromLogic()
@@ -372,6 +373,7 @@ namespace ChessApp
                 {
                     SetCellImage(sr, sc, null);
                     _cells[row, col].Source = src;
+
                 }
             }
 

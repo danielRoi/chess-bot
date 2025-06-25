@@ -208,6 +208,7 @@ namespace ChessApp
 
 
             //castle data update
+            #region castle
             if ((fromBB & WK) != 0) castleData |= 0b00000001; // white king moved
             else if ((fromBB & BK) != 0) castleData |= 0b00001000; // black king moved
             else if ((fromBB & WR) != 0 && fc == 7) castleData |= 0b00000010; // white right rook moved
@@ -251,6 +252,7 @@ namespace ChessApp
                     return 2; //castle left
                 }
             }
+            #endregion
 
             // remove any captured piece
             BP &= ~toBB; BN &= ~toBB; BB &= ~toBB; BR &= ~toBB; BQ &= ~toBB; BK &= ~toBB;
@@ -593,94 +595,65 @@ namespace ChessApp
         /// </summary>
         /// <param name="whiteTurn">Indicates whether it is white's turn</param>
         /// <returns>A list of legal moves, each represented as a 32-bit int</returns>
-        public static List<int> getAllAvailableMoves(bool whiteTurn)
+        public static int GetAllAvailableMoves(bool whiteTurn, Span<int> movesBuffer)
         {
-            var allMoves = new List<int>();
+            int moveCount = 0;
 
-            if (whiteTurn)
+            // Pre-calc occupancy and side bitboards
+            ulong whiteAll = WP | WN | WB | WR | WQ | WK;
+            ulong blackAll = BP | BN | BB | BR | BQ | BK;
+            ulong occupied = whiteAll | blackAll;
+            ulong pieces = whiteTurn ? whiteAll : blackAll;
+
+            while (pieces != 0)
             {
-                for (int i = 0; i < 64; i++)
+                int fromSq = BitOperations.TrailingZeroCount(pieces);
+                pieces &= pieces - 1;
+
+                ulong srcLoc = 1UL << fromSq;
+
+                // Generate pseudo-legal moves bitboard for this piece
+                ulong pseudo = srcLoc switch
                 {
-                    if ((WhiteAll & (1UL << i)) == 0) continue; // skip empty squares
-                    ulong p = 1UL << i;
+                    _ when (WP & srcLoc) != 0 => PawnMoves(srcLoc, true),
+                    _ when (BP & srcLoc) != 0 => PawnMoves(srcLoc, false),
+                    _ when (WN & srcLoc) != 0 || (BN & srcLoc) != 0 => KnightAttacks(srcLoc),
+                    _ when (WB & srcLoc) != 0 || (BB & srcLoc) != 0 => BishopAttacks(srcLoc),
+                    _ when (WR & srcLoc) != 0 || (BR & srcLoc) != 0 => RookAttacks(srcLoc),
+                    _ when (WQ & srcLoc) != 0 || (BQ & srcLoc) != 0 => RookAttacks(srcLoc) | BishopAttacks(srcLoc),
+                    _ when (WK & srcLoc) != 0 || (BK & srcLoc) != 0 => KingAttacks(srcLoc) | KingCastles(srcLoc),
+                    _ => 0UL
+                };
 
-                    int row = i / 8;
-                    int col = i % 8;
-                    List<(int r, int c)> legalTargets = GetValidMoves(row, col, true);
+                // Exclude friendly targets
+                ulong friends = whiteTurn ? whiteAll : blackAll;
+                ulong targets = pseudo & ~friends;
 
-                    foreach (var (tr, tc) in legalTargets)
-                    {
-                        int from = row * 8 + col;
-                        int to = tr * 8 + tc;
-
-                        // Start encoding
-                        int colorBit = 0;
-                        int move = (colorBit << 31)           // bit 31
-                                 | ((from & 0x7F) << 24)      // bits 30-24
-                                 | ((to & 0x7F) << 17);       // bits 23-17
-
-                        // Handle promotion
-                        if ((p & WP) != 0 && (tr == 0)) // Promotion occurs on rank 8 (row 0 in our 0-7 model)
-                        {
-                            // FIX: Use bits 12-14 for promotion to avoid collision with the 'to' square data.
-                            // The previous shift (<< 15) caused bit 17 to be used for knight promotion,
-                            // which conflicts with bit 17 being used for the 'to' square.
-                            allMoves.Add(move | (0b001 << 12)); // Queen
-                            allMoves.Add(move | (0b010 << 12)); // Rook
-                            allMoves.Add(move | (0b011 << 12)); // Bishop
-                            allMoves.Add(move | (0b100 << 12)); // Knight
-                        }
-                        else
-                        {
-                            allMoves.Add(move); // No promotion
-                        }
-                    }
-                }
-
-                return allMoves;
-            }
-            else
-            {
-                for (int i = 0; i < 64; i++)
+                // For each target, make the move, test legality, encode if legal
+                var saved = SaveState();
+                while (targets != 0)
                 {
-                    if ((BlackAll & (1UL << i)) == 0) continue; // skip empty squares
-                    ulong p = 1UL << i;
+                    int toSq = BitOperations.TrailingZeroCount(targets);
+                    targets &= targets - 1;
 
-                    int row = i / 8;
-                    int col = i % 8;
-                    List<(int r, int c)> legalTargets = GetValidMoves(row, col, false);
+                    int fr = fromSq / 8, fc = fromSq % 8;
+                    int tr = toSq / 8, tc = toSq % 8;
 
-                    foreach (var (tr, tc) in legalTargets)
+                    MovePiece(fr, fc, tr, tc);
+                    if (!IsInCheck(whiteTurn))
                     {
-                        int from = row * 8 + col;
-                        int to = tr * 8 + tc;
-
-                        // Start encoding
-                        int colorBit = 1;
-                        int move = (colorBit << 31)           // bit 31
-                                 | ((from & 0x7F) << 24)      // bits 30-24
-                                 | ((to & 0x7F) << 17);       // bits 23-17
-
-                        // Handle promotion
-                        if ((p & BP) != 0 && (tr == 7)) // Promotion occurs on rank 1 (row 7 in our 0-7 model)
-                        {
-                            // FIX: Use bits 12-14 for promotion.
-                            allMoves.Add(move | (0b001 << 12)); // Queen
-                            allMoves.Add(move | (0b010 << 12)); // Rook
-                            allMoves.Add(move | (0b011 << 12)); // Bishop
-                            allMoves.Add(move | (0b100 << 12)); // Knight
-                        }
-                        else
-                        {
-                            allMoves.Add(move); // No promotion
-                        }
+                        int colorBit = whiteTurn ? 0 : 1;
+                        int move = (colorBit << 31)
+                                 | ((fromSq & 0x7F) << 24)
+                                 | ((toSq & 0x7F) << 17);
+                        movesBuffer[moveCount++] = move;
                     }
+                    RestoreState(saved);
                 }
-
-                return allMoves;
             }
+
+            return moveCount;
         }
-
         /// <summary>
         /// Performs perft (performance test) to count all leaf nodes up to a given depth.
         /// Useful for verifying move generation and detecting bugs like incorrect castling/en-passant logic.
@@ -694,10 +667,12 @@ namespace ChessApp
                 return 1; // Reached leaf node
 
             long nodes = 0;
-            var moves = getAllAvailableMoves(whiteTurn);
+            Span<int> moves = stackalloc int[256];
+            int count = GetAllAvailableMoves(whiteTurn, moves);
 
-            foreach (int move in moves)
+            for(int i = 0; i < count; i++)
             {
+                int move = moves[i];
                 // Decode the move
                 bool color = ((move >> 31) & 1) == 1;
                 int fromSq = (move >> 24) & 0x7F;
@@ -729,7 +704,13 @@ namespace ChessApp
             return nodes;
         }
 
-
+        //check whether the player has more moves to play
+        public static bool isGameOver(bool whiteTurn)
+        {
+            // If the player has no moves left, it's a stalemate or checkmate
+            Span<int> moves = stackalloc int[256];
+            return GetAllAvailableMoves(whiteTurn, moves) == 0;
+        }
         public static void PerftWithLogging(int depth, bool whiteTurn, string outputPath)
         {
             using StreamWriter writer = new StreamWriter(outputPath);
@@ -748,12 +729,13 @@ namespace ChessApp
                 writer.WriteLine(moveHistory);
                 return;
             }
-
-            var moves = getAllAvailableMoves(whiteTurn);
+            Span<int> moves = stackalloc int[256];
+            int count = GetAllAvailableMoves(whiteTurn, moves);
             var saved = SaveState();
 
-            foreach (int move in moves)
+            for(int i = 0; i < count;i++)
             {
+                int move = moves[i];
                 // Decode move info
                 int from = (move >> 24) & 0x7F;
                 int to = (move >> 17) & 0x7F;

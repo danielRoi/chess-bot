@@ -1,12 +1,10 @@
-﻿using Microsoft.UI.Xaml.Documents;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
-using Windows.Devices.Midi;
 using static ChessApp.ChessLogic;
 
 namespace ChessApp.Logic
@@ -101,12 +99,13 @@ namespace ChessApp.Logic
         {
             int bestMove = 0;
             int bestScore = whiteTurn ? int.MinValue : int.MaxValue;
-            var moves = ChessLogic.getAllAvailableMoves(whiteTurn);
+            Span<int> moves = stackalloc int[256];
+            int count = ChessLogic.GetAllAvailableMoves(whiteTurn, moves);
 
-            foreach (var move in moves)
+            for(int i = 0; i < count; i++)
             {
                 var savedState = ChessLogic.SaveState();
-
+                int move = moves[i];
                 // Decode and make the move
                 int fromSq = (move >> 24) & 0x7F;
                 int toSq = (move >> 17) & 0x7F;
@@ -151,9 +150,9 @@ namespace ChessApp.Logic
                 // When search depth is reached, evaluate the board position
                 return Evaluate(whiteTurn);
             }
-
-            var moves = ChessLogic.getAllAvailableMoves(whiteTurn);
-            if (moves.Count == 0)
+            Span<int> moves = stackalloc int[256];
+            int count = ChessLogic.GetAllAvailableMoves(whiteTurn, moves);
+            if (count == 0)
             {
                 // Check for checkmate or stalemate
                 return ChessLogic.IsInCheck(whiteTurn) ? (whiteTurn ? -KingValue - depth : KingValue + depth) : 0;
@@ -162,8 +161,9 @@ namespace ChessApp.Logic
             if (whiteTurn)
             {
                 int maxEval = int.MinValue;
-                foreach (var move in moves)
+                for(int i = 0; i< count; i++)
                 {
+                    int move = moves[i];
                     var savedState = ChessLogic.SaveState();
                     int fromSq = (move >> 24) & 0x7F;
                     int toSq = (move >> 17) & 0x7F;
