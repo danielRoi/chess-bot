@@ -104,7 +104,7 @@ namespace ChessApp.Logic
 
             for(int i = 0; i < count; i++)
             {
-                var savedState = ChessLogic.SaveState();
+                ChessLogic.PushState();
                 int move = moves[i];
                 // Decode and make the move
                 int fromSq = (move >> 24) & 0x7F;
@@ -118,7 +118,7 @@ namespace ChessApp.Logic
                 // Start the search
                 int score = minimax(depth - 1, int.MinValue, int.MaxValue, !whiteTurn);
 
-                ChessLogic.RestoreState(savedState);
+                ChessLogic.UndoLastMove();
 
                 if (whiteTurn)
                 {
@@ -164,7 +164,7 @@ namespace ChessApp.Logic
                 for(int i = 0; i< count; i++)
                 {
                     int move = moves[i];
-                    var savedState = ChessLogic.SaveState();
+                    ChessLogic.PushState();
                     int fromSq = (move >> 24) & 0x7F;
                     int toSq = (move >> 17) & 0x7F;
                     int promo = (move >> 12) & 0x7;
@@ -174,7 +174,7 @@ namespace ChessApp.Logic
                                                                                      promo == 4 ? Piece.Knight : Piece.None);
 
                     int eval = minimax(depth - 1, alpha, beta, false);
-                    ChessLogic.RestoreState(savedState);
+                    ChessLogic.UndoLastMove();
 
                     maxEval = Math.Max(maxEval, eval);
                     alpha = Math.Max(alpha, eval);
@@ -188,7 +188,7 @@ namespace ChessApp.Logic
                 int minEval = int.MaxValue;
                 foreach (var move in moves)
                 {
-                    var savedState = ChessLogic.SaveState();
+                    ChessLogic.PushState();
                     int fromSq = (move >> 24) & 0x7F;
                     int toSq = (move >> 17) & 0x7F;
                     int promo = (move >> 12) & 0x7;
@@ -198,7 +198,7 @@ namespace ChessApp.Logic
                                                                                      promo == 4 ? Piece.Knight : Piece.None);
 
                     int eval = minimax(depth - 1, alpha, beta, true);
-                    ChessLogic.RestoreState(savedState);
+                    ChessLogic.UndoLastMove();
 
                     minEval = Math.Min(minEval, eval);
                     beta = Math.Min(beta, eval);

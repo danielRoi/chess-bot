@@ -42,7 +42,7 @@ namespace ChessApp
         private static readonly ulong[] KingMoves = new ulong[64];
 
         // a tiny struct to hold all our bitboards
-        public struct BoardState
+        private struct UndoState
         {
             public ulong WP, WN, WB, WR, WQ, WK;
             public ulong BP, BN, BB, BR, BQ, BK;
@@ -50,31 +50,42 @@ namespace ChessApp
             public ulong? enPassantSquare;
         }
 
-        public static BoardState SaveState() => new BoardState
-        {
-            WP = WP,
-            WN = WN,
-            WB = WB,
-            WR = WR,
-            WQ = WQ,
-            WK = WK,
-            BP = BP,
-            BN = BN,
-            BB = BB,
-            BR = BR,
-            BQ = BQ,
-            BK = BK,
-            castleData = castleData,
-            enPassantSquare = enPassantSquare
-        };
+        private const int MaxUndoStates = 1024;
+        private static readonly UndoState[] undoStack = new UndoState[MaxUndoStates];
+        private static int undoIndex = 0;
 
-        public static void RestoreState(BoardState s)
+        public static void PushState()
         {
+            undoStack[undoIndex] = new UndoState
+            {
+                WP = WP,
+                WN = WN,
+                WB = WB,
+                WR = WR,
+                WQ = WQ,
+                WK = WK,
+                BP = BP,
+                BN = BN,
+                BB = BB,
+                BR = BR,
+                BQ = BQ,
+                BK = BK,
+                castleData = castleData,
+                enPassantSquare = enPassantSquare
+            };
+            undoIndex++;
+        }
+
+        private static void PopState()
+        {
+            undoIndex--;
+            var s = undoStack[undoIndex];
             WP = s.WP; WN = s.WN; WB = s.WB; WR = s.WR; WQ = s.WQ; WK = s.WK;
             BP = s.BP; BN = s.BN; BB = s.BB; BR = s.BR; BQ = s.BQ; BK = s.BK;
             castleData = s.castleData;
             enPassantSquare = s.enPassantSquare;
         }
+
 
         static ChessLogic()
         {
@@ -136,17 +147,16 @@ namespace ChessApp
 
             // build list of pseudo‑legal target squares
             var moves = new List<(int, int)>();
-            var saved = SaveState();
-
             while (pseuduMoves != 0)
             {
                 int toSq = BitOperations.TrailingZeroCount(pseuduMoves);
                 pseuduMoves &= pseuduMoves - 1;
+                PushState();
                 int tr = toSq / 8, tc = toSq % 8; // target row and column
                 MovePiece(row, col, tr, tc);
                 if (!IsInCheck(whiteTurn))
                     moves.Add((tr, tc));
-                RestoreState(saved);
+                UndoLastMove();
 
             }
             return moves;
@@ -630,7 +640,6 @@ namespace ChessApp
                 ulong targets = pseudo & ~friends;
 
                 // For each target, make the move, test legality, encode if legal
-                var saved = SaveState();
                 while (targets != 0)
                 {
                     int toSq = BitOperations.TrailingZeroCount(targets);
@@ -638,7 +647,8 @@ namespace ChessApp
 
                     int fr = fromSq / 8, fc = fromSq % 8;
                     int tr = toSq / 8, tc = toSq % 8;
-
+                    
+                    PushState();
                     MovePiece(fr, fc, tr, tc);
                     if (!IsInCheck(whiteTurn))
                     {
@@ -648,7 +658,7 @@ namespace ChessApp
                                  | ((toSq & 0x7F) << 17);
                         movesBuffer[moveCount++] = move;
                     }
-                    RestoreState(saved);
+                    UndoLastMove();
                 }
             }
 
@@ -685,8 +695,7 @@ namespace ChessApp
 
                 int fr = fromSq / 8, fc = fromSq % 8;
                 int tr = toSq / 8, tc = toSq % 8;
-                var lastSavedState = SaveState(); // Save current state before making the move
-
+                PushState();
                 // Execute move (updates board state)
                 MovePiece(fr, fc, tr, tc,
                     promo == 1 ? Piece.Queen :
@@ -698,7 +707,7 @@ namespace ChessApp
                 nodes += Perfit(depth - 1, !whiteTurn);
 
                 // Undo move
-                RestoreState(lastSavedState);
+                UndoLastMove();
             }
 
             return nodes;
@@ -714,9 +723,7 @@ namespace ChessApp
         public static void PerftWithLogging(int depth, bool whiteTurn, string outputPath)
         {
             using StreamWriter writer = new StreamWriter(outputPath);
-            var state = SaveState();
             PerftRecursive(depth, whiteTurn, "", writer);
-            RestoreState(state);
         }
 
         /// <summary>
@@ -731,7 +738,7 @@ namespace ChessApp
             }
             Span<int> moves = stackalloc int[256];
             int count = GetAllAvailableMoves(whiteTurn, moves);
-            var saved = SaveState();
+            PushState();
 
             for(int i = 0; i < count;i++)
             {
@@ -769,7 +776,7 @@ namespace ChessApp
 
                 PerftRecursive(depth - 1, !whiteTurn, moveHistory + moveStr + " ", writer);
 
-                RestoreState(saved);
+                UndoLastMove();
             }
         }
 
@@ -780,6 +787,11 @@ namespace ChessApp
             int file = sq % 8;
             int rank = sq / 8;
             return $"{(char)('a' + file)}{7 - rank + 1}";
+        }
+
+        public static void UndoLastMove()
+        {
+            PopState();
         }
     }
 }
