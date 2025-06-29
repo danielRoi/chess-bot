@@ -35,7 +35,7 @@ namespace ChessApp
                                            // 3: black king, 4: black right rook, 5: black left rook.
                                            //0 is not moved, 1 is moved or eaten.
 
-        private static ulong? enPassantSquare = null;
+        private static ulong enPassantSquare = 0;
 
         //precomputed knight and king moves
         private static readonly ulong[] KnightMoves = new ulong[64];
@@ -47,7 +47,7 @@ namespace ChessApp
             public ulong WP, WN, WB, WR, WQ, WK;
             public ulong BP, BN, BB, BR, BQ, BK;
             public int castleData;
-            public ulong? enPassantSquare;
+            public ulong enPassantSquare;
         }
 
         private const int MaxUndoStates = 1024;
@@ -56,36 +56,26 @@ namespace ChessApp
 
         public static void PushState()
         {
-            undoStack[undoIndex] = new UndoState
-            {
-                WP = WP,
-                WN = WN,
-                WB = WB,
-                WR = WR,
-                WQ = WQ,
-                WK = WK,
-                BP = BP,
-                BN = BN,
-                BB = BB,
-                BR = BR,
-                BQ = BQ,
-                BK = BK,
-                castleData = castleData,
-                enPassantSquare = enPassantSquare
-            };
-            undoIndex++;
-        }
+            // get a direct ref to the next slot
+            ref UndoState dst = ref undoStack[undoIndex++];
 
-        private static void PopState()
+            // copy board state into it
+            dst.WP = WP; dst.WN = WN; dst.WB = WB; dst.WR = WR; dst.WQ = WQ; dst.WK = WK;
+            dst.BP = BP; dst.BN = BN; dst.BB = BB; dst.BR = BR; dst.BQ = BQ; dst.BK = BK;
+            dst.castleData = castleData;
+            dst.enPassantSquare = enPassantSquare;
+        }
+        public static void PopState()
         {
-            undoIndex--;
-            var s = undoStack[undoIndex];
-            WP = s.WP; WN = s.WN; WB = s.WB; WR = s.WR; WQ = s.WQ; WK = s.WK;
-            BP = s.BP; BN = s.BN; BB = s.BB; BR = s.BR; BQ = s.BQ; BK = s.BK;
-            castleData = s.castleData;
-            enPassantSquare = s.enPassantSquare;
-        }
+            // move index back, then grab slot by ref
+            ref readonly UndoState src = ref undoStack[--undoIndex];
 
+            // restore board state
+            WP = src.WP; WN = src.WN; WB = src.WB; WR = src.WR; WQ = src.WQ; WK = src.WK;
+            BP = src.BP; BN = src.BN; BB = src.BB; BR = src.BR; BQ = src.BQ; BK = src.BK;
+            castleData = src.castleData;
+            enPassantSquare = src.enPassantSquare;
+        }
 
         static ChessLogic()
         {
@@ -176,15 +166,15 @@ namespace ChessApp
 
             #region enPassant
             //check for en passant capture
-            if (enPassantSquare.HasValue && toBB == enPassantSquare)
+            if (toBB == enPassantSquare)
             {
                 // en passant capture
                 if ((fromBB & WP) != 0) // white pawn captures
                 {
                     WP &= ~fromBB;
-                    BP &= ~enPassantSquare.Value << 8; // remove black pawn
+                    BP &= ~enPassantSquare << 8; // remove black pawn
                     WP |= toBB;
-                    enPassantSquare = null; // reset en passant
+                    enPassantSquare = 0; // reset en passant
                     return 3;
 
                 }
@@ -192,8 +182,8 @@ namespace ChessApp
                 {
                     BP &= ~fromBB;
                     BP |= toBB;
-                    WP &= ~enPassantSquare.Value >> 8; // remove white pawn
-                    enPassantSquare = null; // reset en passant
+                    WP &= ~enPassantSquare >> 8; // remove white pawn
+                    enPassantSquare = 0; // reset en passant
                     return 3;
 
                 }
@@ -212,7 +202,7 @@ namespace ChessApp
             }
             else
             {
-                enPassantSquare = null; // reset en passant if not a pawn double push
+                enPassantSquare = 0; // reset en passant if not a pawn double push
             }
             #endregion
 
@@ -365,10 +355,10 @@ namespace ChessApp
                 moves |= (0x000000FF00000000UL & (p >> 16)) & ~occ & ~(occ >> 8); // double push
 
                 //en passant capture
-                if (enPassantSquare.HasValue && (((enPassantSquare.Value << 7 == p) && (p & ~FileH) != 0) || (((enPassantSquare.Value << 9 == p) && (p & ~FileA) != 0))))
+                if ((((enPassantSquare << 7 == p) && (p & ~FileH) != 0) || (((enPassantSquare << 9 == p) && (p & ~FileA) != 0))))
                 {
                     // en passant capture
-                    moves |= (enPassantSquare.Value);
+                    moves |= (enPassantSquare);
                 }
             }
             else
@@ -381,10 +371,10 @@ namespace ChessApp
                 moves |= (0x00000000FF000000UL & (p << 16)) & ~occ & ~(occ << 8); // double push
 
                 //en passant capture
-                if (enPassantSquare.HasValue && ((enPassantSquare.Value >> 7 == p && (p & ~FileA) != 0) || (enPassantSquare.Value >> 9 == p && (p & ~FileH) != 0)))
+                if (((enPassantSquare >> 7 == p && (p & ~FileA) != 0) || (enPassantSquare >> 9 == p && (p & ~FileH) != 0)))
                 {
                     // en passant capture
-                    moves |= (enPassantSquare.Value);
+                    moves |= (enPassantSquare);
                 }
             }
             return moves;
@@ -411,11 +401,13 @@ namespace ChessApp
         }
 
         private static ulong RookAttacks(ulong r)
-            => Slide(r, Up) | Slide(r, Down)
-                             | Slide(r, Right) | Slide(r, Left);
+            => Magic.GetRookAttacks(BitOperations.TrailingZeroCount(r), Occupied);
+        //=> Slide(r, Up) | Slide(r, Down)
+        //                 | Slide(r, Right) | Slide(r, Left);
 
         private static ulong BishopAttacks(ulong b)
-            => Slide(b, UR) | Slide(b, DL) | Slide(b, UL) | Slide(b, DR);
+             => Magic.GetBishopAttacks(BitOperations.TrailingZeroCount(b), Occupied);
+        //=> Slide(b, UR) | Slide(b, DL) | Slide(b, UL) | Slide(b, DR);
 
         private static ulong Slide(ulong bb, int dir)
         {
@@ -476,7 +468,7 @@ namespace ChessApp
             WP = WN = WB = WR = WQ = WK = 0;
             BP = BN = BB = BR = BQ = BK = 0;
             castleData = 0;
-            enPassantSquare = null;
+            enPassantSquare = 0;
 
             var parts = fen.Split(' ');
             var rows = parts[0].Split('/');
@@ -575,9 +567,9 @@ namespace ChessApp
             if (castling == "") castling = "-";
 
             string ep = "-";
-            if (enPassantSquare.HasValue)
+            if (enPassantSquare != 0)
             {
-                int epIdx = BitOperations.TrailingZeroCount(enPassantSquare.Value);
+                int epIdx = BitOperations.TrailingZeroCount(enPassantSquare);
                 ep = $"{(char)('a' + epIdx % 8)}{1 + epIdx / 8}";
             }
 
@@ -793,5 +785,58 @@ namespace ChessApp
         {
             PopState();
         }
+
+
+        /*
+        public static void redoNormalMove(int move, Piece capturedPiece, bool whiteTurn, int oldCastleData, ulong? oldEnPassantSquare)
+        {
+            // Decode and make the move
+            int fromSq = (move >> 24) & 0x7F;
+            int toSq = (move >> 17) & 0x7F;
+            int promo = (move >> 12) & 0x7;
+            ulong fromBB = 1UL << fromSq;
+            ulong toBB = 1UL << toSq;
+            enPassantSquare = oldEnPassantSquare;
+            castleData = oldCastleData;
+
+
+            // find which color & piece, clear from‐square, set to‐square
+            if ((WP & toBB) != 0) { WP &= ~toBB; WP |= fromBB; }
+            else if ((BP & toBB) != 0) { BP &= ~toBB; BP |= fromBB; }
+            else if ((WN & toBB) != 0) { WN &= ~toBB; WN |= fromBB; }
+            else if ((BN & toBB) != 0) { BN &= ~toBB; BN |= fromBB; }
+            else if ((WB & toBB) != 0) { WB &= ~toBB; WB |= fromBB; }
+            else if ((BB & toBB) != 0) { BB &= ~toBB; BB |= fromBB; }
+            else if ((WR & toBB) != 0) { WR &= ~toBB; WR |= fromBB; }
+            else if ((BR & toBB) != 0) { BR &= ~toBB; BR |= fromBB; }
+            else if ((WQ & toBB) != 0) { WQ &= ~toBB; WQ |= fromBB; }
+            else if ((BQ & toBB) != 0) { BQ &= ~toBB; BQ |= fromBB; }
+            else if ((WK & toBB) != 0) { WK &= ~toBB; WK |= fromBB; }
+            else if ((BK & toBB) != 0) { BK &= ~toBB; BK |= fromBB; }
+
+
+            if (capturedPiece != Piece.None)
+            {
+                if (!whiteTurn)
+                {
+                    if (capturedPiece == Piece.Pawn) BP |= toBB;
+                    if (capturedPiece == Piece.Knight) BN |= toBB;
+                    if (capturedPiece == Piece.Bishop) BB |= toBB;
+                    if (capturedPiece == Piece.Rook) BR |= toBB;
+                    if (capturedPiece == Piece.Queen) BQ |= toBB;
+                    if (capturedPiece == Piece.King) BK |= toBB;
+                }
+                else
+                {
+                    if (capturedPiece == Piece.Pawn) WP |= toBB;
+                    if (capturedPiece == Piece.Knight) WN |= toBB;
+                    if (capturedPiece == Piece.Bishop) WB |= toBB;
+                    if (capturedPiece == Piece.Rook) WR |= toBB;
+                    if (capturedPiece == Piece.Queen) WQ |= toBB;
+                    if (capturedPiece == Piece.King) WK |= toBB;
+                }
+            }
+        }
+        */
     }
 }
