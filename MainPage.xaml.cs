@@ -17,41 +17,93 @@ namespace ChessApp
         private readonly Dictionary<string, ImageSource> _imageCache = new();
         private (int row, int col)? _selected;
         private List<(int row, int col)> _legal_moves;
+
+        // Game state
         bool whiteTurn = true;
-        bool BotPlay = true;
+        bool whiteIsBot = false;
+        bool blackIsBot = false;
         int botDepth = 4;
+        bool boardFlipped = false;
+        bool autoSize = true;
+        double currentBoardSize = 400;
+
+        // Move tracking
+        int moveCount = 1;
+        DateTime gameStartTime;
+
         public MainPage()
         {
             InitializeComponent();
+            InitializeGame();
+        }
+
+        private void InitializeGame()
+        {
+            // Initialize UI controls
+            WhitePlayerPicker.SelectedIndex = 0; // Human
+            BlackPlayerPicker.SelectedIndex = 0; // Human
+            BotDepthStepper.Value = botDepth;
+            BotDepthLabel.Text = botDepth.ToString();
+            PerftDepthLabel.Text = "6";
+            BoardSizeSlider.Value = currentBoardSize;
+            BoardSizeLabel.Text = currentBoardSize.ToString("0");
+            AutoSizeSwitch.IsToggled = autoSize;
+
+            // Initialize game
+            gameStartTime = DateTime.Now;
             BuildBoard();
             ChessLogic.InitializeBoard();
             SetupInitialPosition();
-            {
-                //ChessLogic.SetPositionFromFEN("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 \r\n");
-                //RefreshBoardFromLogic();
-                testPrefit(6);
-                //ChessLogic.PerftWithLogging(5, true, "perfit/prefit_log1.txt"); // Run Perft with logging for depth 5
-            }
+            UpdateGameStatus();
 
+            // Start timer for game time display
+            Device.StartTimer(TimeSpan.FromSeconds(1), () =>
+            {
+                UpdateTimeDisplay();
+                return true; // Continue timer
+            });
         }
 
         void BuildBoard()
         {
+            // Clear existing definitions
+            ChessGrid.RowDefinitions.Clear();
+            ChessGrid.ColumnDefinitions.Clear();
+            ChessGrid.Children.Clear();
+
+            // Set board size
+            if (autoSize)
+            {
+                ChessGrid.HeightRequest = Math.Min(Width * 0.6, Height * 0.8);
+                ChessGrid.WidthRequest = ChessGrid.HeightRequest;
+            }
+            else
+            {
+                ChessGrid.HeightRequest = currentBoardSize;
+                ChessGrid.WidthRequest = currentBoardSize;
+            }
+
+            // Create grid definitions
             for (int i = 0; i < BoardSize; i++)
             {
                 ChessGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Star });
                 ChessGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
             }
 
+            // Create cells
             for (int row = 0; row < BoardSize; row++)
+            {
                 for (int col = 0; col < BoardSize; col++)
                 {
+                    int displayRow = boardFlipped ? (7 - row) : row;
+                    int displayCol = boardFlipped ? (7 - col) : col;
+
                     var frame = new Frame
                     {
                         Padding = 0,
                         Margin = 0,
                         HasShadow = false,
-                        BackgroundColor = ((row + col) % 2 == 0)
+                        BackgroundColor = ((displayRow + displayCol) % 2 == 0)
                             ? Colors.Beige
                             : Colors.SaddleBrown,
                         BorderColor = Colors.Transparent,
@@ -63,13 +115,13 @@ namespace ChessApp
 
                     var tap = new TapGestureRecognizer();
                     int r = row, c = col;
-                    // Changed the event handler to be async
                     tap.Tapped += (_, __) => OnCellTapped(r, c);
                     frame.GestureRecognizers.Add(tap);
                     frame.Content = img;
 
-                    ChessGrid.Add(frame, col, row);
+                    ChessGrid.Add(frame, displayCol, displayRow);
                 }
+            }
         }
 
         void SetupInitialPosition()
@@ -109,9 +161,12 @@ namespace ChessApp
             img.Source = src;
         }
 
-        // Method signature changed to `async void` to support `await`
         async void OnCellTapped(int row, int col)
         {
+            // Don't allow moves if it's bot's turn
+            if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
+                return;
+
             if (_selected == null)
             {
                 // First click: Select piece and highlight legal moves
@@ -134,7 +189,6 @@ namespace ChessApp
             else
             {
                 // Second click: Perform move
-
                 clearAllHighlights();
 
                 if (!_legal_moves.Contains((row, col)))
@@ -145,86 +199,286 @@ namespace ChessApp
 
                 var (sr, sc) = _selected.Value;
 
-                // --- Improved Promotion Logic ---
+                // Handle promotion
                 var (_, piece) = ChessLogic.WhatPieceIsIt(sr, sc);
                 bool isPromotion = (piece == ChessLogic.Piece.Pawn) && (row == 0 || row == 7);
-                string promotedPieceName = null;
                 ChessLogic.Piece promotedPiece = ChessLogic.Piece.None;
+
                 if (isPromotion)
                 {
-                    // `await` the selection instead of blocking with `.Result`
                     int selectedIndex = await ShowImageSelectionDialogAsync();
-
-                    // Handle cancellation from the dialog
                     if (selectedIndex < 0)
                     {
                         _selected = null;
                         return;
                     }
-
                     ChessLogic.Piece[] promotionPieces = { ChessLogic.Piece.Queen, ChessLogic.Piece.Rook, ChessLogic.Piece.Bishop, ChessLogic.Piece.Knight };
                     promotedPiece = promotionPieces[selectedIndex];
                 }
+
                 movePiece(sr, sc, row, col, promotedPiece);
+                await CheckGameEnd();
+            }
+        }
 
-                //check for checkmate or stalemate
-                if (ChessLogic.isGameOver(whiteTurn))
+        private async Task CheckGameEnd()
+        {
+            if (ChessLogic.isGameOver(whiteTurn))
+            {
+                if (ChessLogic.IsInCheck(whiteTurn))
                 {
-                    if (ChessLogic.IsInCheck(whiteTurn))
-                    {
-                        await DisplayAlert("Game Over", whiteTurn ? "Black wins!" : "White wins!", "OK");
-                    }
-                    else
-                    {
-                        await DisplayAlert("Game Over", "Stalemate!", "OK");
-                    }
-                    return; // Exit the method after displaying the alert
+                    await DisplayAlert("Game Over", whiteTurn ? "Black wins!" : "White wins!", "OK");
                 }
-                showEvaluation();
-                if (BotPlay)
+                else
                 {
-                    await playBotAsync();
+                    await DisplayAlert("Game Over", "Stalemate!", "OK");
                 }
+                return;
+            }
 
-                //check for checkmate or stalemate
-                if (ChessLogic.isGameOver(whiteTurn))
-                {
-                    if (ChessLogic.IsInCheck(whiteTurn))
-                    {
-                        await DisplayAlert("Game Over", whiteTurn ? "Black wins!" : "White wins!", "OK");
-                    }
-                    else
-                    {
-                        await DisplayAlert("Game Over", "Stalemate!", "OK");
-                    }
-                    return; // Exit the method after displaying the alert
-                }
-                showEvaluation();
+            showEvaluation();
+
+            // Check if bot should play
+            if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
+            {
+                await playBotAsync();
             }
         }
 
         void HighlightSquare(int row, int col, bool on, bool isTarget)
         {
-            var frame = (Frame)ChessGrid.Children[row * BoardSize + col];
+            int displayRow = boardFlipped ? (7 - row) : row;
+            int displayCol = boardFlipped ? (7 - col) : col;
+
+            var frame = (Frame)ChessGrid.Children[displayRow * BoardSize + displayCol];
             if (on)
             {
                 if (isTarget)
                 {
-                    frame.BackgroundColor = Colors.Red; // Highlight for legal moves
+                    frame.BackgroundColor = Colors.Red;
                 }
                 else
                 {
-                    frame.BorderColor = Colors.Gold; // Highlight for selected piece
+                    frame.BorderColor = Colors.Gold;
                 }
             }
             else
             {
-                // Reset to default colors
-                frame.BackgroundColor = ((row + col) % 2 == 0) ? Colors.Beige : Colors.SaddleBrown;
+                frame.BackgroundColor = ((displayRow + displayCol) % 2 == 0) ? Colors.Beige : Colors.SaddleBrown;
                 frame.BorderColor = Colors.Transparent;
             }
         }
 
+        void clearAllHighlights()
+        {
+            for (int r = 0; r < BoardSize; r++)
+            {
+                for (int c = 0; c < BoardSize; c++)
+                {
+                    HighlightSquare(r, c, false, false);
+                    HighlightSquare(r, c, false, true);
+                }
+            }
+        }
+
+        void movePiece(int sr, int sc, int row, int col, ChessLogic.Piece promotedPiece)
+        {
+            int res = ChessLogic.MovePiece(sr, sc, row, col, promotedPiece);
+
+            Dictionary<ChessLogic.Piece, string> pieceToString = new Dictionary<ChessLogic.Piece, string>
+            {
+                { ChessLogic.Piece.Queen, "queen" },
+                { ChessLogic.Piece.Rook, "rook" },
+                { ChessLogic.Piece.Bishop, "bishop" },
+                { ChessLogic.Piece.Knight, "knight" }
+            };
+
+            // Update UI
+            if (promotedPiece != ChessLogic.Piece.None)
+            {
+                SetCellImage(sr, sc, null);
+                SetCellImage(row, col, $"{(whiteTurn ? "white" : "black")}_{pieceToString[promotedPiece]}");
+            }
+            else
+            {
+                var src = _cells[sr, sc].Source;
+                if (res == 1) // Castle right
+                {
+                    var rookSource = _cells[row, col + 1].Source;
+                    SetCellImage(sr, sc, null);
+                    SetCellImage(row, col + 1, null);
+                    _cells[row, col].Source = src;
+                    _cells[row, col - 1].Source = rookSource;
+                }
+                else if (res == 2) // Castle left
+                {
+                    var rookSource = _cells[row, col - 2].Source;
+                    SetCellImage(sr, sc, null);
+                    SetCellImage(row, col - 2, null);
+                    _cells[row, col].Source = src;
+                    _cells[row, col + 1].Source = rookSource;
+                }
+                else if (res == 3) // En passant
+                {
+                    SetCellImage(sr, sc, null);
+                    _cells[row, col].Source = src;
+                    SetCellImage(sr, col, null);
+                }
+                else // Normal move
+                {
+                    SetCellImage(sr, sc, null);
+                    _cells[row, col].Source = src;
+                }
+            }
+
+            whiteTurn = !whiteTurn;
+            _selected = null;
+
+            // Update move count
+            if (whiteTurn) moveCount++;
+
+            UpdateGameStatus();
+        }
+
+        async Task playBotAsync()
+        {
+            StatusLabel.Text = "Bot is thinking...";
+
+            var botMove = await Task.Run(() => Engine.FindBestMove(botDepth, whiteTurn));
+
+            int from = (botMove >> 24) & 0x7F;
+            int to = (botMove >> 17) & 0x7F;
+            int promo = (botMove >> 12) & 0x7;
+
+            int fr = from / 8, fc = from % 8;
+            int tr = to / 8, tc = to % 8;
+
+            movePiece(fr, fc, tr, tc,
+                promo == 1 ? Piece.Queen :
+                promo == 2 ? Piece.Rook :
+                promo == 3 ? Piece.Bishop :
+                promo == 4 ? Piece.Knight :
+                Piece.None);
+
+            StatusLabel.Text = "Ready to play";
+            CheckGameEnd();
+        }
+
+        private void UpdateGameStatus()
+        {
+            TurnLabel.Text = whiteTurn ? "White to move" : "Black to move";
+            MoveCountLabel.Text = $"Move: {moveCount}";
+            showEvaluation();
+        }
+
+        private void UpdateTimeDisplay()
+        {
+            var elapsed = DateTime.Now - gameStartTime;
+            TimeLabel.Text = $"Time: {elapsed.ToString(@"mm\:ss")}";
+        }
+
+        private void showEvaluation()
+        {
+            double score = Engine.Evaluate(whiteTurn);
+            EvalLabel.Text = $"Eval: {(score >= 0 ? "+" : "")}{score / 1000:0.00}";
+        }
+
+        // Event Handlers
+        private void OnPageSizeChanged(object sender, EventArgs e)
+        {
+            if (autoSize)
+            {
+                BuildBoard();
+            }
+        }
+
+        private void OnPlayerTypeChanged(object sender, EventArgs e)
+        {
+            whiteIsBot = WhitePlayerPicker.SelectedIndex == 1;
+            blackIsBot = BlackPlayerPicker.SelectedIndex == 1;
+
+            // If it's currently bot's turn, make the move
+            if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
+            {
+                Task.Run(async () => await playBotAsync());
+            }
+        }
+
+        private void OnBotDepthChanged(object sender, ValueChangedEventArgs e)
+        {
+            botDepth = (int)e.NewValue;
+            BotDepthLabel.Text = botDepth.ToString();
+        }
+
+        private void OnBoardSizeChanged(object sender, ValueChangedEventArgs e)
+        {
+            currentBoardSize = e.NewValue;
+            BoardSizeLabel.Text = currentBoardSize.ToString("0");
+            if (!autoSize)
+            {
+                BuildBoard();
+            }
+        }
+
+        private void OnAutoSizeToggled(object sender, ToggledEventArgs e)
+        {
+            autoSize = e.Value;
+            BoardSizeSlider.IsEnabled = !autoSize;
+            BuildBoard();
+        }
+
+        private void OnPerftDepthChanged(object sender, ValueChangedEventArgs e)
+        {
+            PerftDepthLabel.Text = ((int)e.NewValue).ToString();
+        }
+
+        private async void StartPerftTest(object sender, EventArgs e)
+        {
+            int depth = (int)PerftDepthStepper.Value;
+            PerftStatusLabel.Text = "Running...";
+
+            await Task.Run(() => testPrefit(depth));
+
+            PerftStatusLabel.Text = "Complete!";
+        }
+
+        private async void StartNewGame(object sender, EventArgs e)
+        {
+            ChessLogic.InitializeBoard();
+            SetupInitialPosition();
+            whiteTurn = true;
+            moveCount = 1;
+            gameStartTime = DateTime.Now;
+            _selected = null;
+            clearAllHighlights();
+            UpdateGameStatus();
+            StatusLabel.Text = "New game started";
+            if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
+            {
+                await playBotAsync();
+            }
+        }
+
+        private void FlipBoard(object sender, EventArgs e)
+        {
+            boardFlipped = !boardFlipped;
+            BuildBoard();
+            RefreshBoardFromLogic();
+        }
+
+        private void UndoMove(object sender, EventArgs e)
+        {
+            // This would require implementing move history in ChessLogic
+            StatusLabel.Text = "Undo not yet implemented";
+        }
+
+        private async void ResetToStartPosition(object sender, EventArgs e)
+        {
+            UserInput.Text = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+            orderInFenNotation(sender, e);
+        }
+
+        // Existing methods (kept from original code)
         private async Task<int> ShowImageSelectionDialogAsync()
         {
             var selectionPage = new ImageSelectionPage(whiteTurn);
@@ -235,26 +489,32 @@ namespace ChessApp
         private async void orderInFenNotation(object sender, EventArgs e)
         {
             string inputText = UserInput.Text.Trim();
-            whiteTurn = inputText.Split(" ")[1] == "w";
-            if (!whiteTurn && BotPlay) await playBotAsync();
-            _selected = null;
-            clearAllHighlights(); // Clear any existing highlights before setting a new position
-            if (!string.IsNullOrEmpty(inputText))
-            {
-                ChessLogic.SetPositionFromFEN(inputText);
-                RefreshBoardFromLogic();
-            }
-        }
+            if (string.IsNullOrEmpty(inputText)) return;
 
+            string[] fenParts = inputText.Split(" ");
+            if (fenParts.Length > 1)
+            {
+                whiteTurn = fenParts[1] == "w";
+            }
+
+            _selected = null;
+            clearAllHighlights();
+
+            ChessLogic.SetPositionFromFEN(inputText);
+            RefreshBoardFromLogic();
+            UpdateGameStatus();
+
+            // Check if bot should play after position change
+            //if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
+            //{
+            //    await playBotAsync();
+            //}
+        }
 
         async private void copyPosition(object sender, EventArgs e)
         {
             await Clipboard.SetTextAsync(ChessLogic.GetFENFromCurrentPosition(whiteTurn));
-        }
-        private void showEvaluation()
-        {
-            double score = Engine.Evaluate(whiteTurn);
-            EvalLabel.Text = $"Eval: {(score >= 0 ? "+" : "")}{score / 1000:0.00}";
+            StatusLabel.Text = "Position copied to clipboard";
         }
 
         void RefreshBoardFromLogic()
@@ -282,18 +542,6 @@ namespace ChessApp
             }
         }
 
-
-        void clearAllHighlights()
-        {
-            for (int r = 0; r < BoardSize; r++)
-            {
-                for (int c = 0; c < BoardSize; c++)
-                {
-                    HighlightSquare(r, c, false, false); // Clears border
-                    HighlightSquare(r, c, false, true);  // Clears background
-                }
-            }
-        }
         void testPrefit(int maxDepth = 6)
         {
             string filePath = "perfit/perft_results.txt";
@@ -325,81 +573,6 @@ namespace ChessApp
             }
 
             Console.WriteLine("Results saved to perft_results.txt");
-        }
-
-        void movePiece(int sr, int sc, int row, int col, ChessLogic.Piece promotedPiece)
-        {
-            int res = ChessLogic.MovePiece(sr, sc, row, col, promotedPiece);
-
-            Dictionary<ChessLogic.Piece, string> pieceToString = new Dictionary<ChessLogic.Piece, string>();
-            pieceToString.Add(ChessLogic.Piece.Queen, "queen");
-            pieceToString.Add(ChessLogic.Piece.Rook, "rook");
-            pieceToString.Add(ChessLogic.Piece.Bishop, "bishop");
-            pieceToString.Add(ChessLogic.Piece.Knight, "knight");
-
-            // --- Corrected UI Update Logic ---
-            if (promotedPiece != ChessLogic.Piece.None)
-            {
-                SetCellImage(sr, sc, null);          // Clear the pawn
-                SetCellImage(row, col, $"{(whiteTurn ? "white" : "black")}_{pieceToString[promotedPiece]}"); // Set the new promoted piece
-            }
-            else
-            {
-                // Handle standard moves, castling, and en passant
-                var src = _cells[sr, sc].Source;
-                if (res == 1) // Castle right
-                {
-                    var rookSource = _cells[row, col + 1].Source;
-                    SetCellImage(sr, sc, null);
-                    SetCellImage(row, col + 1, null);
-                    _cells[row, col].Source = src;
-                    _cells[row, col - 1].Source = rookSource;
-                }
-                else if (res == 2) // Castle left
-                {
-                    var rookSource = _cells[row, col - 2].Source;
-                    SetCellImage(sr, sc, null);
-                    SetCellImage(row, col - 2, null);
-                    _cells[row, col].Source = src;
-                    _cells[row, col + 1].Source = rookSource;
-                }
-                else if (res == 3) // En passant
-                {
-                    SetCellImage(sr, sc, null);
-                    _cells[row, col].Source = src;
-                    SetCellImage(sr, col, null); // Clear the captured pawn
-                }
-                else // Normal move
-                {
-                    SetCellImage(sr, sc, null);
-                    _cells[row, col].Source = src;
-
-                }
-            }
-
-            whiteTurn = !whiteTurn;
-            _selected = null;
-        }
-        async Task playBotAsync()
-        {
-            // Run engine calculation on background thread
-            var botMove = await Task.Run(() => Engine.FindBestMove(botDepth, whiteTurn));
-
-            // Extract move details
-            int from = (botMove >> 24) & 0x7F;
-            int to = (botMove >> 17) & 0x7F;
-            int promo = (botMove >> 12) & 0x7;
-
-            int fr = from / 8, fc = from % 8;
-            int tr = to / 8, tc = to % 8;
-
-            // Apply the move on UI thread
-            movePiece(fr, fc, tr, tc,
-                promo == 1 ? Piece.Queen :
-                promo == 2 ? Piece.Rook :
-                promo == 3 ? Piece.Bishop :
-                promo == 4 ? Piece.Knight :
-                Piece.None);
         }
     }
 }

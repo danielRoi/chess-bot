@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Numerics;
-using System.IO;
+﻿using System.Numerics;
 
 namespace ChessApp
 {
@@ -402,12 +399,9 @@ namespace ChessApp
 
         private static ulong RookAttacks(ulong r)
             => Magic.GetRookAttacks(BitOperations.TrailingZeroCount(r), Occupied);
-        //=> Slide(r, Up) | Slide(r, Down)
-        //                 | Slide(r, Right) | Slide(r, Left);
 
         private static ulong BishopAttacks(ulong b)
              => Magic.GetBishopAttacks(BitOperations.TrailingZeroCount(b), Occupied);
-        //=> Slide(b, UR) | Slide(b, DL) | Slide(b, UL) | Slide(b, DR);
 
         private static ulong Slide(ulong bb, int dir)
         {
@@ -469,7 +463,7 @@ namespace ChessApp
             BP = BN = BB = BR = BQ = BK = 0;
             castleData = 0;
             enPassantSquare = 0;
-
+            undoIndex = 0;
             var parts = fen.Split(' ');
             var rows = parts[0].Split('/');
             for (int r = 0; r < 8; r++)
@@ -631,6 +625,9 @@ namespace ChessApp
                 ulong friends = whiteTurn ? whiteAll : blackAll;
                 ulong targets = pseudo & ~friends;
 
+                //int oldCastleData = castleData;
+                //ulong oldEnPassantSquare = enPassantSquare;
+
                 // For each target, make the move, test legality, encode if legal
                 while (targets != 0)
                 {
@@ -639,17 +636,20 @@ namespace ChessApp
 
                     int fr = fromSq / 8, fc = fromSq % 8;
                     int tr = toSq / 8, tc = toSq % 8;
-                    
+
                     PushState();
-                    MovePiece(fr, fc, tr, tc);
+                    int colorBit = whiteTurn ? 0 : 1;
+
+                    //Piece capturedPiece = WhatPieceIsIt(tr, tc).Item2;
+                    int moveRes = MovePiece(fr, fc, tr, tc);
                     if (!IsInCheck(whiteTurn))
                     {
-                        int colorBit = whiteTurn ? 0 : 1;
                         int move = (colorBit << 31)
-                                 | ((fromSq & 0x7F) << 24)
-                                 | ((toSq & 0x7F) << 17);
+                                    | ((fromSq & 0x7F) << 24)
+                                    | ((toSq & 0x7F) << 17);
                         movesBuffer[moveCount++] = move;
                     }
+                    //if (moveRes == 0) redoNormalMove(move, capturedPiece, whiteTurn, oldCastleData, oldEnPassantSquare);
                     UndoLastMove();
                 }
             }
@@ -672,7 +672,7 @@ namespace ChessApp
             Span<int> moves = stackalloc int[256];
             int count = GetAllAvailableMoves(whiteTurn, moves);
 
-            for(int i = 0; i < count; i++)
+            for (int i = 0; i < count; i++)
             {
                 int move = moves[i];
                 // Decode the move
@@ -732,7 +732,7 @@ namespace ChessApp
             int count = GetAllAvailableMoves(whiteTurn, moves);
             PushState();
 
-            for(int i = 0; i < count;i++)
+            for (int i = 0; i < count; i++)
             {
                 int move = moves[i];
                 // Decode move info
@@ -786,14 +786,14 @@ namespace ChessApp
             PopState();
         }
 
-
-        /*
-        public static void redoNormalMove(int move, Piece capturedPiece, bool whiteTurn, int oldCastleData, ulong? oldEnPassantSquare)
+        /*public static void redoNormalMove(int move, Piece capturedPiece, bool whiteTurn, int oldCastleData, ulong oldEnPassantSquare)
         {
+            //remove from stack
+            undoIndex--;
+
             // Decode and make the move
             int fromSq = (move >> 24) & 0x7F;
             int toSq = (move >> 17) & 0x7F;
-            int promo = (move >> 12) & 0x7;
             ulong fromBB = 1UL << fromSq;
             ulong toBB = 1UL << toSq;
             enPassantSquare = oldEnPassantSquare;
@@ -802,7 +802,10 @@ namespace ChessApp
 
             // find which color & piece, clear from‐square, set to‐square
             if ((WP & toBB) != 0) { WP &= ~toBB; WP |= fromBB; }
-            else if ((BP & toBB) != 0) { BP &= ~toBB; BP |= fromBB; }
+            else if ((BP & toBB) != 0)
+            {
+                BP &= ~toBB; BP |= fromBB;
+            }
             else if ((WN & toBB) != 0) { WN &= ~toBB; WN |= fromBB; }
             else if ((BN & toBB) != 0) { BN &= ~toBB; BN |= fromBB; }
             else if ((WB & toBB) != 0) { WB &= ~toBB; WB |= fromBB; }

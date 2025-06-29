@@ -2,34 +2,164 @@
     x:Class="ChessApp.MainPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    Title="Chess">
+    Title="Chess"
+    SizeChanged="OnPageSizeChanged">
 
-    <Grid ColumnDefinitions="Auto, Auto" Padding="10">
+    <Grid ColumnDefinitions="*, Auto" Padding="10" RowDefinitions="*, Auto">
 
-        <!-- Left: Chess Board -->
-        <Grid Grid.Column="0" HorizontalOptions="Center" VerticalOptions="Center">
-            <Grid WidthRequest="{Binding Source={x:Reference ChessGrid}, Path=HeightRequest}">
-                <Grid x:Name="ChessGrid"
-                      RowSpacing="0"
-                      ColumnSpacing="0"
-                      Padding="0"
-                      VerticalOptions="Fill"
-                      HorizontalOptions="Fill"
-                      HeightRequest="400"
-                      WidthRequest="400">
-                    <!-- Board setup goes here -->
-                </Grid>
+        <!-- Chess Board Area - Responsive -->
+        <Border Grid.Column="0" Grid.Row="0" 
+                StrokeThickness="2" 
+                Stroke="DarkGray" 
+                Margin="10"
+                HorizontalOptions="Center" 
+                VerticalOptions="Center">
+            <Grid x:Name="ChessGrid"
+                  RowSpacing="0"
+                  ColumnSpacing="0"
+                  Padding="0"
+                  BackgroundColor="Transparent">
+                <!-- Board cells will be added programmatically -->
             </Grid>
-        </Grid>
+        </Border>
 
-        <!-- Right: Controls -->
-        <StackLayout Grid.Column="1" Margin="20,0" VerticalOptions="Center" Spacing="10">
-            <Entry x:Name="UserInput" 
-                   Text="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR" 
-                   WidthRequest="200"/>
-            <Button Text="Set FEN" Clicked="orderInFenNotation"/>
-            <Button Text="Copy FEN Position" Clicked="copyPosition"/>
-            <Label x:Name="EvalLabel" Text="Eval: " FontSize="Medium"/>
+        <!-- Right Panel - Controls -->
+        <ScrollView Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" 
+                    VerticalOptions="FillAndExpand" 
+                    WidthRequest="280">
+            <StackLayout Margin="20,0" Spacing="15">
+
+                <!-- Game Status -->
+                <Frame BackgroundColor="LightBlue" Padding="10" HasShadow="False">
+                    <StackLayout Spacing="5">
+                        <Label Text="Game Status" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center"/>
+                        <Label x:Name="TurnLabel" Text="White to move" FontSize="14" HorizontalOptions="Center"/>
+                        <Label x:Name="EvalLabel" Text="Eval: 0.00" FontSize="14" HorizontalOptions="Center"/>
+                    </StackLayout>
+                </Frame>
+
+                <!-- Player Settings -->
+                <Frame BackgroundColor="LightGreen" Padding="10" HasShadow="False">
+                    <StackLayout Spacing="8">
+                        <Label Text="Players" FontSize="16" FontAttributes="Bold"/>
+
+                        <StackLayout Orientation="Horizontal">
+                            <Label Text="White:" VerticalOptions="Center" WidthRequest="60"/>
+                            <Picker x:Name="WhitePlayerPicker" 
+                                    WidthRequest="120"
+                                    SelectedIndexChanged="OnPlayerTypeChanged">
+                                <Picker.Items>
+                                    <x:String>Human</x:String>
+                                    <x:String>Bot</x:String>
+                                </Picker.Items>
+                            </Picker>
+                        </StackLayout>
+
+                        <StackLayout Orientation="Horizontal">
+                            <Label Text="Black:" VerticalOptions="Center" WidthRequest="60"/>
+                            <Picker x:Name="BlackPlayerPicker" 
+                                    WidthRequest="120"
+                                    SelectedIndexChanged="OnPlayerTypeChanged">
+                                <Picker.Items>
+                                    <x:String>Human</x:String>
+                                    <x:String>Bot</x:String>
+                                </Picker.Items>
+                            </Picker>
+                        </StackLayout>
+
+                        <StackLayout Orientation="Horizontal">
+                            <Label Text="Bot Depth:" VerticalOptions="Center" WidthRequest="80"/>
+                            <Stepper x:Name="BotDepthStepper" 
+                                     Minimum="1" Maximum="8" Value="4" Increment="1"
+                                     ValueChanged="OnBotDepthChanged"
+                                     WidthRequest="100"/>
+                            <Label x:Name="BotDepthLabel" Text="4" VerticalOptions="Center" WidthRequest="20"/>
+                        </StackLayout>
+                    </StackLayout>
+                </Frame>
+
+                <!-- Board Size Control -->
+                <Frame BackgroundColor="LightBlue" Padding="10" HasShadow="False">
+                    <StackLayout Spacing="8">
+                        <Label Text="Board Size" FontSize="16" FontAttributes="Bold"/>
+                        <StackLayout Orientation="Horizontal">
+                            <Label Text="Size:" VerticalOptions="Center" WidthRequest="60"/>
+                            <Slider x:Name="BoardSizeSlider" 
+                                    Minimum="300" Maximum="800" Value="400"
+                                    ValueChanged="OnBoardSizeChanged"
+                                    WidthRequest="120"/>
+                            <Label x:Name="BoardSizeLabel" Text="400" VerticalOptions="Center" WidthRequest="40"/>
+                        </StackLayout>
+                        <Switch x:Name="AutoSizeSwitch" 
+                                IsToggled="True"
+                                Toggled="OnAutoSizeToggled"/>
+                        <Label Text="Auto-size to window" FontSize="12"/>
+                    </StackLayout>
+                </Frame>
+
+                <!-- Position Control -->
+                <Frame BackgroundColor="LightCoral" Padding="10" HasShadow="False">
+                    <StackLayout Spacing="8">
+                        <Label Text="Position" FontSize="16" FontAttributes="Bold"/>
+                        <Entry x:Name="UserInput" 
+                               Text="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                               FontSize="12"
+                               Placeholder="Enter FEN notation"/>
+                        <Button Text="Set Position" Clicked="orderInFenNotation" 
+                                BackgroundColor="DarkRed" TextColor="White"/>
+                        <Button Text="Copy Position" Clicked="copyPosition"
+                                BackgroundColor="DarkBlue" TextColor="White"/>
+                        <Button Text="Reset to Start" Clicked="ResetToStartPosition"
+                                BackgroundColor="DarkGreen" TextColor="White"/>
+                    </StackLayout>
+                </Frame>
+
+                <!-- Testing Tools -->
+                <Frame BackgroundColor="Plum" Padding="10" HasShadow="False">
+                    <StackLayout Spacing="8">
+                        <Label Text="Testing Tools" FontSize="16" FontAttributes="Bold"/>
+
+                        <StackLayout Orientation="Horizontal">
+                            <Label Text="Perft Depth:" VerticalOptions="Center" WidthRequest="80"/>
+                            <Stepper x:Name="PerftDepthStepper" 
+                                     Minimum="1" Maximum="8" Value="6" Increment="1"
+                                     ValueChanged="OnPerftDepthChanged"
+                                     WidthRequest="100"/>
+                            <Label x:Name="PerftDepthLabel" Text="6" VerticalOptions="Center" WidthRequest="20"/>
+                        </StackLayout>
+
+                        <Button Text="Start Perft Test" Clicked="StartPerftTest"
+                                BackgroundColor="Purple" TextColor="White"/>
+                        <Label x:Name="PerftStatusLabel" Text="Ready" FontSize="12" 
+                               HorizontalOptions="Center"/>
+                    </StackLayout>
+                </Frame>
+
+                <!-- Game Controls -->
+                <Frame BackgroundColor="Orange" Padding="10" HasShadow="False">
+                    <StackLayout Spacing="8">
+                        <Label Text="Game Controls" FontSize="16" FontAttributes="Bold"/>
+                        <Button Text="New Game" Clicked="StartNewGame"
+                                BackgroundColor="OrangeRed" TextColor="White"/>
+                        <Button Text="Flip Board" Clicked="FlipBoard"
+                                BackgroundColor="DarkOrange" TextColor="White"/>
+                        <Button Text="Undo Move" Clicked="UndoMove"
+                                BackgroundColor="Chocolate" TextColor="White"/>
+                    </StackLayout>
+                </Frame>
+
+            </StackLayout>
+        </ScrollView>
+
+        <!-- Bottom Status Bar -->
+        <StackLayout Grid.Column="0" Grid.Row="1" 
+                     Orientation="Horizontal" 
+                     BackgroundColor="LightGray" 
+                     Padding="10,5" 
+                     Spacing="20">
+            <Label x:Name="StatusLabel" Text="Ready to play" FontSize="12"/>
+            <Label x:Name="MoveCountLabel" Text="Move: 1" FontSize="12"/>
+            <Label x:Name="TimeLabel" Text="Time: 00:00" FontSize="12"/>
         </StackLayout>
 
     </Grid>
