@@ -389,6 +389,7 @@ namespace ChessApp
             if (autoSize)
             {
                 BuildBoard();
+                RefreshBoardFromLogic();
             }
         }
 
