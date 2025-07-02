@@ -640,6 +640,30 @@ namespace ChessApp
                     PushState();
                     int colorBit = whiteTurn ? 0 : 1;
 
+                    //pawn promotion
+                    if ((srcLoc & WP) != 0 && (tr == 0 || tr == 7))
+                    {
+                        int move = (colorBit << 31)
+                        | ((fromSq & 0x7F) << 24)
+                        | ((toSq & 0x7F) << 17);
+                        // Add four promotion options: 01 = Q, 10 = R, 11 = B, 00 = N
+                        movesBuffer[moveCount++] = move | (0b001 << 12); // Queen
+                        movesBuffer[moveCount++] = move | (0b011 << 12); // Bishop
+                        movesBuffer[moveCount++] = move | (0b100 << 12); // Knight (or none)
+                        movesBuffer[moveCount++] = move | (0b010 << 12); // Rook
+                    }
+                    else if((srcLoc & BP) != 0 && (tr == 7 || tr == 0))
+                    {
+                        int move = (colorBit << 31)
+                        | ((fromSq & 0x7F) << 24)
+                        | ((toSq & 0x7F) << 17);
+                        // Add four promotion options: 01 = Q, 10 = R, 11 = B, 00 = N
+                        movesBuffer[moveCount++] = move | (0b001 << 12); // Queen
+                        movesBuffer[moveCount++] = move | (0b011 << 12); // Bishop
+                        movesBuffer[moveCount++] = move | (0b100 << 12); // Knight (or none)
+                        movesBuffer[moveCount++] = move | (0b010 << 12); // Rook
+                    }
+
                     //Piece capturedPiece = WhatPieceIsIt(tr, tc).Item2;
                     int moveRes = MovePiece(fr, fc, tr, tc);
                     if (!IsInCheck(whiteTurn))

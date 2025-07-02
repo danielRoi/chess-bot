@@ -102,7 +102,7 @@ namespace ChessApp.Logic
             Span<int> moves = stackalloc int[256];
             int count = ChessLogic.GetAllAvailableMoves(whiteTurn, moves);
 
-            for(int i = 0; i < count; i++)
+            for (int i = 0; i < count; i++)
             {
                 ChessLogic.PushState();
                 int move = moves[i];
@@ -161,7 +161,7 @@ namespace ChessApp.Logic
             if (whiteTurn)
             {
                 int maxEval = int.MinValue;
-                for(int i = 0; i< count; i++)
+                for (int i = 0; i < count; i++)
                 {
                     int move = moves[i];
                     ChessLogic.PushState();
@@ -186,16 +186,17 @@ namespace ChessApp.Logic
             else // Black's turn
             {
                 int minEval = int.MaxValue;
-                foreach (var move in moves)
+                for (int i = 0; i < count; i++)  // <-- Fixed: Use for loop with count
                 {
+                    int move = moves[i];
                     ChessLogic.PushState();
                     int fromSq = (move >> 24) & 0x7F;
                     int toSq = (move >> 17) & 0x7F;
                     int promo = (move >> 12) & 0x7;
                     ChessLogic.MovePiece(fromSq / 8, fromSq % 8, toSq / 8, toSq % 8, promo == 1 ? Piece.Queen :
-                                                                                     promo == 2 ? Piece.Rook :
-                                                                                     promo == 3 ? Piece.Bishop :
-                                                                                     promo == 4 ? Piece.Knight : Piece.None);
+                                                                                        promo == 2 ? Piece.Rook :
+                                                                                        promo == 3 ? Piece.Bishop :
+                                                                                        promo == 4 ? Piece.Knight : Piece.None);
 
                     int eval = minimax(depth - 1, alpha, beta, true);
                     ChessLogic.UndoLastMove();
@@ -207,8 +208,7 @@ namespace ChessApp.Logic
                 }
                 return minEval;
             }
-        }
-
+        }     
 
         /// <summary>
         /// Evaluates the current board position and returns a score.
@@ -233,7 +233,7 @@ namespace ChessApp.Logic
             score -= CalculateScoreForPiece(ChessLogic.BQ, QueenValue, QueenPST, false);
             score -= CalculateScoreForPiece(ChessLogic.BK, KingValue, KingPST, false);
 
-            int endGameScore = evaluateEndGame(whiteTurn);
+            int endGameScore = (evaluateEndGame(whiteTurn) / 10);
             return score + endGameScore;
         }
 
