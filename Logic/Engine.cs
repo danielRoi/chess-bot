@@ -80,21 +80,66 @@ namespace ChessApp.Logic
             -10,  0,  5,  0,  0,  0,  0,-10,
             -20,-10,-10, -5, -5,-10,-10,-20
         };
+
         private static readonly int[] KingPST = {
-
-        -30, -40, -40, -50, -50, -40, -40, -30,
-        -30, -40, -40, -50, -50, -40, -40, -30,
-        -30, -40, -40, -50, -50, -40, -40, -30,
-        -30, -40, -40, -50, -50, -40, -40, -30,
-        -20, -30, -30, -40, -40, -30, -30, -20,
-        -10, -20, -20, -20, -20, -20, -20, -10,
-         20,  20,   0,   0,   0,   0,  20,  20,
-         20,  30,  10,   0,   0,  10,  30,  20
+            -30, -40, -40, -50, -50, -40, -40, -30,
+            -30, -40, -40, -50, -50, -40, -40, -30,
+            -30, -40, -40, -50, -50, -40, -40, -30,
+            -30, -40, -40, -50, -50, -40, -40, -30,
+            -20, -30, -30, -40, -40, -30, -30, -20,
+            -10, -20, -20, -20, -20, -20, -20, -10,
+             20,  20,   0,   0,   0,   0,  20,  20,
+             20,  30,  10,   0,   0,  10,  30,  20
         };
-
-
         #endregion
 
+        /// <summary>
+        /// Time-based search using iterative deepening.
+        /// This is the main method called by MainPage.xaml.cs
+        /// </summary>
+        public static int FindBestMoveWithTime(TimeSpan timeLimit, bool whiteTurn)
+        {
+            int bestMove = 0;
+            DateTime startTime = DateTime.Now;
+
+            // Use iterative deepening with time control
+            for (int depth = 1; depth <= 8; depth++)
+            {
+                // Check if we have time for another iteration
+                var elapsed = DateTime.Now - startTime;
+                if (elapsed.TotalMilliseconds > timeLimit.TotalMilliseconds * 0.75)
+                    break;
+
+                try
+                {
+                    int move = FindBestMove(depth, whiteTurn);
+                    if (move != 0) // Valid move found
+                        bestMove = move;
+
+                    // If we're running out of time, stop searching deeper
+                    elapsed = DateTime.Now - startTime;
+                    if (elapsed.TotalMilliseconds > timeLimit.TotalMilliseconds * 0.85)
+                        break;
+                }
+                catch
+                {
+                    // If search takes too long or fails, use the best move found so far
+                    break;
+                }
+            }
+
+            // If no move was found, fallback to depth 1 search
+            if (bestMove == 0)
+            {
+                bestMove = FindBestMove(1, whiteTurn);
+            }
+
+            return bestMove;
+        }
+
+        /// <summary>
+        /// Fixed-depth search
+        /// </summary>
         public static int FindBestMove(int depth, bool whiteTurn)
         {
             int bestMove = 0;
@@ -150,8 +195,10 @@ namespace ChessApp.Logic
                 // When search depth is reached, evaluate the board position
                 return Evaluate(whiteTurn);
             }
+
             Span<int> moves = stackalloc int[256];
             int count = ChessLogic.GetAllAvailableMoves(whiteTurn, moves);
+
             if (count == 0)
             {
                 // Check for checkmate or stalemate
@@ -178,7 +225,7 @@ namespace ChessApp.Logic
 
                     maxEval = Math.Max(maxEval, eval);
                     alpha = Math.Max(alpha, eval);
-                    if (beta <= alpha) // Pruning
+                    if (beta <= alpha) // Alpha-Beta pruning
                         break;
                 }
                 return maxEval;
@@ -186,7 +233,7 @@ namespace ChessApp.Logic
             else // Black's turn
             {
                 int minEval = int.MaxValue;
-                for (int i = 0; i < count; i++)  // <-- Fixed: Use for loop with count
+                for (int i = 0; i < count; i++)
                 {
                     int move = moves[i];
                     ChessLogic.PushState();
@@ -203,22 +250,22 @@ namespace ChessApp.Logic
 
                     minEval = Math.Min(minEval, eval);
                     beta = Math.Min(beta, eval);
-                    if (beta <= alpha) // Pruning
+                    if (beta <= alpha) // Alpha-Beta pruning
                         break;
                 }
                 return minEval;
             }
-        }     
+        }
 
         /// <summary>
         /// Evaluates the current board position and returns a score.
         /// Positive score favors white, negative favors black.
-        /// NOTE: This requires access to the bitboards in ChessLogic. They must be made public or accessible via a public method.
         /// </summary>
         public static int Evaluate(bool whiteTurn)
         {
             int score = 0;
-            
+
+            // Material and positional evaluation
             score += CalculateScoreForPiece(ChessLogic.WP, PawnValue, PawnPST, true);
             score += CalculateScoreForPiece(ChessLogic.WN, KnightValue, KnightPST, true);
             score += CalculateScoreForPiece(ChessLogic.WB, BishopValue, BishopPST, true);
@@ -233,11 +280,14 @@ namespace ChessApp.Logic
             score -= CalculateScoreForPiece(ChessLogic.BQ, QueenValue, QueenPST, false);
             score -= CalculateScoreForPiece(ChessLogic.BK, KingValue, KingPST, false);
 
-            int endGameScore = (evaluateEndGame(whiteTurn) / 10);
+            // Add endgame evaluation
+            int endGameScore = evaluateEndGame(whiteTurn);
             return score + endGameScore;
         }
 
-
+        /// <summary>
+        /// Endgame evaluation focusing on king activity and opposition
+        /// </summary>
         private static int evaluateEndGame(bool whiteTurn)
         {
             if (!IsEndgame()) return 0;
@@ -280,6 +330,9 @@ namespace ChessApp.Logic
             return whiteTurn ? res : -res; // Return positive for white's perspective, negative for black
         }
 
+        /// <summary>
+        /// Check if we're in an endgame
+        /// </summary>
         private static bool IsEndgame()
         {
             int totalNonPawnMaterial = BitOperations.PopCount(ChessLogic.WQ | ChessLogic.BQ) * QueenValue;
@@ -288,6 +341,29 @@ namespace ChessApp.Logic
             totalNonPawnMaterial += BitOperations.PopCount(ChessLogic.WN | ChessLogic.BN) * KnightValue;
 
             return totalNonPawnMaterial <= 1300;
+        }
+
+        /// <summary>
+        /// Get total material count for a side
+        /// </summary>
+        private static int GetMaterialCount(bool isWhite)
+        {
+            if (isWhite)
+            {
+                return BitOperations.PopCount(ChessLogic.WP) * PawnValue +
+                       BitOperations.PopCount(ChessLogic.WN) * KnightValue +
+                       BitOperations.PopCount(ChessLogic.WB) * BishopValue +
+                       BitOperations.PopCount(ChessLogic.WR) * RookValue +
+                       BitOperations.PopCount(ChessLogic.WQ) * QueenValue;
+            }
+            else
+            {
+                return BitOperations.PopCount(ChessLogic.BP) * PawnValue +
+                       BitOperations.PopCount(ChessLogic.BN) * KnightValue +
+                       BitOperations.PopCount(ChessLogic.BB) * BishopValue +
+                       BitOperations.PopCount(ChessLogic.BR) * RookValue +
+                       BitOperations.PopCount(ChessLogic.BQ) * QueenValue;
+            }
         }
 
         /// <summary>
@@ -309,7 +385,5 @@ namespace ChessApp.Logic
             }
             return score;
         }
-
-
     }
 }

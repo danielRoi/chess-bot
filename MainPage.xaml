@@ -35,6 +35,14 @@
                         <Label Text="Game Status" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center"/>
                         <Label x:Name="TurnLabel" Text="White to move" FontSize="14" HorizontalOptions="Center"/>
                         <Label x:Name="EvalLabel" Text="Eval: 0.00" FontSize="14" HorizontalOptions="Center"/>
+                        <StackLayout Orientation="Horizontal" HorizontalOptions="Center">
+                            <Label Text="White: " FontSize="12"/>
+                            <Label x:Name="WhiteTimeLabel" Text="10:00" FontSize="12" FontAttributes="Bold"/>
+                        </StackLayout>
+                        <StackLayout Orientation="Horizontal" HorizontalOptions="Center">
+                            <Label Text="Black: " FontSize="12"/>
+                            <Label x:Name="BlackTimeLabel" Text="10:00" FontSize="12" FontAttributes="Bold"/>
+                        </StackLayout>
                     </StackLayout>
                 </Frame>
 
@@ -46,8 +54,8 @@
                         <StackLayout Orientation="Horizontal">
                             <Label Text="White:" VerticalOptions="Center" WidthRequest="60"/>
                             <Picker x:Name="WhitePlayerPicker" 
-                                    WidthRequest="120"
-                                    SelectedIndexChanged="OnPlayerTypeChanged">
+                    WidthRequest="120"
+                    SelectedIndexChanged="OnPlayerTypeChanged">
                                 <Picker.Items>
                                     <x:String>Human</x:String>
                                     <x:String>Bot</x:String>
@@ -58,22 +66,13 @@
                         <StackLayout Orientation="Horizontal">
                             <Label Text="Black:" VerticalOptions="Center" WidthRequest="60"/>
                             <Picker x:Name="BlackPlayerPicker" 
-                                    WidthRequest="120"
-                                    SelectedIndexChanged="OnPlayerTypeChanged">
+                    WidthRequest="120"
+                    SelectedIndexChanged="OnPlayerTypeChanged">
                                 <Picker.Items>
                                     <x:String>Human</x:String>
                                     <x:String>Bot</x:String>
                                 </Picker.Items>
                             </Picker>
-                        </StackLayout>
-
-                        <StackLayout Orientation="Horizontal">
-                            <Label Text="Bot Depth:" VerticalOptions="Center" WidthRequest="80"/>
-                            <Stepper x:Name="BotDepthStepper" 
-                                     Minimum="1" Maximum="8" Value="4" Increment="1"
-                                     ValueChanged="OnBotDepthChanged"
-                                     WidthRequest="100"/>
-                            <Label x:Name="BotDepthLabel" Text="4" VerticalOptions="Center" WidthRequest="20"/>
                         </StackLayout>
                     </StackLayout>
                 </Frame>
@@ -160,6 +159,7 @@
             <Label x:Name="StatusLabel" Text="Ready to play" FontSize="12"/>
             <Label x:Name="MoveCountLabel" Text="Move: 1" FontSize="12"/>
             <Label x:Name="TimeLabel" Text="Time: 00:00" FontSize="12"/>
+            <Label x:Name="MovesEvalueted" Text="Moves Evalueted: 0" FontSize="12"/>
         </StackLayout>
 
     </Grid>

@@ -22,10 +22,17 @@ namespace ChessApp
         bool whiteTurn = true;
         bool whiteIsBot = false;
         bool blackIsBot = false;
-        int botDepth = 4;
+        bool gameInProgress = false; // New: Track if game is active
         bool boardFlipped = false;
         bool autoSize = true;
         double currentBoardSize = 400;
+
+        // Time controls - New
+        TimeSpan whiteTimeRemaining = TimeSpan.FromMinutes(10); // Default 10 minutes
+        TimeSpan blackTimeRemaining = TimeSpan.FromMinutes(10);
+        TimeSpan timeIncrement = TimeSpan.FromSeconds(0); // Increment per move
+        DateTime moveStartTime;
+        bool clockRunning = false;
 
         // Move tracking
         int moveCount = 1;
@@ -42,9 +49,11 @@ namespace ChessApp
             // Initialize UI controls
             WhitePlayerPicker.SelectedIndex = 0; // Human
             BlackPlayerPicker.SelectedIndex = 0; // Human
-            BotDepthStepper.Value = botDepth;
-            BotDepthLabel.Text = botDepth.ToString();
-            PerftDepthLabel.Text = "6";
+
+            // Initialize time controls (assuming you have these UI elements)
+            WhiteTimeLabel.Text = FormatTime(whiteTimeRemaining);
+            BlackTimeLabel.Text = FormatTime(blackTimeRemaining);
+
             BoardSizeSlider.Value = currentBoardSize;
             BoardSizeLabel.Text = currentBoardSize.ToString("0");
             AutoSizeSwitch.IsToggled = autoSize;
@@ -56,12 +65,76 @@ namespace ChessApp
             SetupInitialPosition();
             UpdateGameStatus();
 
-            // Start timer for game time display
-            Device.StartTimer(TimeSpan.FromSeconds(1), () =>
+            // Start timer for game time display and clock management
+            Device.StartTimer(TimeSpan.FromMilliseconds(100), () =>
             {
                 UpdateTimeDisplay();
+                UpdateGameClock();
                 return true; // Continue timer
             });
+        }
+
+        private void UpdateGameClock()
+        {
+            if (!clockRunning || !gameInProgress) return;
+
+            var elapsed = DateTime.Now - moveStartTime;
+
+            if (whiteTurn)
+            {
+                whiteTimeRemaining -= TimeSpan.FromMilliseconds(100);
+                WhiteTimeLabel.Text = FormatTime(whiteTimeRemaining);
+
+                if (whiteTimeRemaining <= TimeSpan.Zero)
+                {
+                    whiteTimeRemaining = TimeSpan.Zero;
+                    clockRunning = false;
+                    gameInProgress = false;
+                    DisplayAlert("Game Over", "Black wins on time!", "OK");
+                }
+            }
+            else
+            {
+                blackTimeRemaining -= TimeSpan.FromMilliseconds(100);
+                BlackTimeLabel.Text = FormatTime(blackTimeRemaining);
+
+                if (blackTimeRemaining <= TimeSpan.Zero)
+                {
+                    blackTimeRemaining = TimeSpan.Zero;
+                    clockRunning = false;
+                    gameInProgress = false;
+                    DisplayAlert("Game Over", "White wins on time!", "OK");
+                }
+            }
+        }
+
+        private string FormatTime(TimeSpan time)
+        {
+            if (time.TotalHours >= 1)
+                return time.ToString(@"h\:mm\:ss");
+            else
+                return time.ToString(@"mm\:ss");
+        }
+
+        private void StartClock()
+        {
+            if (!gameInProgress) return;
+
+            moveStartTime = DateTime.Now;
+            clockRunning = true;
+        }
+
+        private void StopClock()
+        {
+            clockRunning = false;
+        }
+
+        private void AddTimeIncrement()
+        {
+            if (whiteTurn)
+                blackTimeRemaining += timeIncrement; // Add to the player who just moved
+            else
+                whiteTimeRemaining += timeIncrement;
         }
 
         void BuildBoard()
@@ -163,6 +236,9 @@ namespace ChessApp
 
         async void OnCellTapped(int row, int col)
         {
+            // Don't allow moves if game is not in progress
+            if (!gameInProgress) return;
+
             // Don't allow moves if it's bot's turn
             if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
                 return;
@@ -216,8 +292,11 @@ namespace ChessApp
                     promotedPiece = promotionPieces[selectedIndex];
                 }
 
+                StopClock();
                 movePiece(sr, sc, row, col, promotedPiece);
+                AddTimeIncrement();
                 await CheckGameEnd();
+                if (gameInProgress) StartClock();
             }
         }
 
@@ -225,6 +304,9 @@ namespace ChessApp
         {
             if (ChessLogic.isGameOver(whiteTurn))
             {
+                gameInProgress = false;
+                StopClock();
+
                 if (ChessLogic.IsInCheck(whiteTurn))
                 {
                     await DisplayAlert("Game Over", whiteTurn ? "Black wins!" : "White wins!", "OK");
@@ -342,9 +424,17 @@ namespace ChessApp
 
         async Task playBotAsync()
         {
-            StatusLabel.Text = "Bot is thinking...";
+            if (!gameInProgress) return;
 
-            var botMove = await Task.Run(() => Engine.FindBestMove(botDepth, whiteTurn));
+            StatusLabel.Text = "Bot is thinking...";
+            StopClock();
+
+            // Calculate available time for the bot
+            TimeSpan availableTime = whiteTurn ? whiteTimeRemaining : blackTimeRemaining;
+            // Use a fraction of available time (e.g., 5% of remaining time, min 1 second, max 30 seconds)
+            double thinkTimeSeconds = Math.Max(1.0, Math.Min(5.0, availableTime.TotalSeconds * 0.05));
+
+            var botMove = await Task.Run(() => Engine.FindBestMoveWithTime(TimeSpan.FromSeconds(thinkTimeSeconds), whiteTurn));
 
             int from = (botMove >> 24) & 0x7F;
             int to = (botMove >> 17) & 0x7F;
@@ -360,8 +450,10 @@ namespace ChessApp
                 promo == 4 ? Piece.Knight :
                 Piece.None);
 
+            AddTimeIncrement();
             StatusLabel.Text = "Ready to play";
             CheckGameEnd();
+            if (gameInProgress) StartClock();
         }
 
         private void UpdateGameStatus()
@@ -374,7 +466,7 @@ namespace ChessApp
         private void UpdateTimeDisplay()
         {
             var elapsed = DateTime.Now - gameStartTime;
-            TimeLabel.Text = $"Time: {elapsed.ToString(@"mm\:ss")}";
+            TimeLabel.Text = $"Game Time: {elapsed.ToString(@"mm\:ss")}";
         }
 
         private void showEvaluation()
@@ -395,20 +487,18 @@ namespace ChessApp
 
         private void OnPlayerTypeChanged(object sender, EventArgs e)
         {
+            // Prevent changing player types during an active game
+            if (gameInProgress)
+            {
+                // Reset to previous values
+                WhitePlayerPicker.SelectedIndex = whiteIsBot ? 1 : 0;
+                BlackPlayerPicker.SelectedIndex = blackIsBot ? 1 : 0;
+                StatusLabel.Text = "Cannot change player types during game";
+                return;
+            }
+
             whiteIsBot = WhitePlayerPicker.SelectedIndex == 1;
             blackIsBot = BlackPlayerPicker.SelectedIndex == 1;
-
-            // If it's currently bot's turn, make the move
-            if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
-            {
-                Task.Run(async () => await playBotAsync());
-            }
-        }
-
-        private void OnBotDepthChanged(object sender, ValueChangedEventArgs e)
-        {
-            botDepth = (int)e.NewValue;
-            BotDepthLabel.Text = botDepth.ToString();
         }
 
         private void OnBoardSizeChanged(object sender, ValueChangedEventArgs e)
@@ -445,15 +535,25 @@ namespace ChessApp
 
         private async void StartNewGame(object sender, EventArgs e)
         {
+            // Reset time controls
+            whiteTimeRemaining = TimeSpan.FromMinutes(10); // You might want to make this configurable
+            blackTimeRemaining = TimeSpan.FromMinutes(10);
+            WhiteTimeLabel.Text = FormatTime(whiteTimeRemaining);
+            BlackTimeLabel.Text = FormatTime(blackTimeRemaining);
+
             ChessLogic.InitializeBoard();
             SetupInitialPosition();
             whiteTurn = true;
             moveCount = 1;
             gameStartTime = DateTime.Now;
+            gameInProgress = true;
             _selected = null;
             clearAllHighlights();
             UpdateGameStatus();
             StatusLabel.Text = "New game started";
+
+            StartClock(); // Start the clock for the new game
+
             if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
             {
                 await playBotAsync();
@@ -500,16 +600,12 @@ namespace ChessApp
 
             _selected = null;
             clearAllHighlights();
+            StopClock();
+            gameInProgress = false; // Stop the game when loading a position
 
             ChessLogic.SetPositionFromFEN(inputText);
             RefreshBoardFromLogic();
             UpdateGameStatus();
-
-            // Check if bot should play after position change
-            //if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
-            //{
-            //    await playBotAsync();
-            //}
         }
 
         async private void copyPosition(object sender, EventArgs e)
