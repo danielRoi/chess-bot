@@ -292,11 +292,9 @@ namespace ChessApp
                     promotedPiece = promotionPieces[selectedIndex];
                 }
 
-                StopClock();
                 movePiece(sr, sc, row, col, promotedPiece);
                 AddTimeIncrement();
                 await CheckGameEnd();
-                if (gameInProgress) StartClock();
             }
         }
 
@@ -427,12 +425,11 @@ namespace ChessApp
             if (!gameInProgress) return;
 
             StatusLabel.Text = "Bot is thinking...";
-            StopClock();
 
             // Calculate available time for the bot
             TimeSpan availableTime = whiteTurn ? whiteTimeRemaining : blackTimeRemaining;
             // Use a fraction of available time (e.g., 5% of remaining time, min 1 second, max 30 seconds)
-            double thinkTimeSeconds = Math.Max(1.0, Math.Min(5.0, availableTime.TotalSeconds * 0.05));
+            double thinkTimeSeconds = Math.Max(1.0, Math.Min(15.0, availableTime.TotalSeconds * 0.05));
 
             var botMove = await Task.Run(() => Engine.FindBestMoveWithTime(TimeSpan.FromSeconds(thinkTimeSeconds), whiteTurn));
 
@@ -453,7 +450,6 @@ namespace ChessApp
             AddTimeIncrement();
             StatusLabel.Text = "Ready to play";
             CheckGameEnd();
-            if (gameInProgress) StartClock();
         }
 
         private void UpdateGameStatus()
