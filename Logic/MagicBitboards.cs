@@ -1,41 +1,42 @@
 ﻿using System.Collections.Generic;
-//all the code here and the numbers based on this code https://github.com/SebLague/Chess-Coding-Adventure/tree/Chess-V2-UCI/Chess-Coding-Adventure/src/Core/Move%20Generation/Magics
+using System.Runtime.CompilerServices;
+
 namespace ChessApp
 {
     // Helper structures and utilities
-    public struct Coord
+    public readonly struct Coord
     {
-        public int fileIndex;
-        public int rankIndex;
+        public readonly int fileIndex;
+        public readonly int rankIndex;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Coord(int fileIndex, int rankIndex)
         {
             this.fileIndex = fileIndex;
             this.rankIndex = rankIndex;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Coord(int squareIndex)
         {
-            fileIndex = squareIndex % 8;
-            rankIndex = squareIndex / 8;
+            fileIndex = squareIndex & 7; // Faster than % 8
+            rankIndex = squareIndex >> 3; // Faster than / 8
         }
 
-        public int SquareIndex => rankIndex * 8 + fileIndex;
-
-        public bool IsValidSquare()
+        public int SquareIndex
         {
-            return fileIndex >= 0 && fileIndex < 8 && rankIndex >= 0 && rankIndex < 8;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (rankIndex << 3) + fileIndex; // Faster than * 8
         }
 
-        public static Coord operator +(Coord a, Coord b)
-        {
-            return new Coord(a.fileIndex + b.fileIndex, a.rankIndex + b.rankIndex);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsValidSquare() => (uint)fileIndex < 8 && (uint)rankIndex < 8;
 
-        public static Coord operator *(Coord coord, int multiplier)
-        {
-            return new Coord(coord.fileIndex * multiplier, coord.rankIndex * multiplier);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Coord operator +(Coord a, Coord b) => new Coord(a.fileIndex + b.fileIndex, a.rankIndex + b.rankIndex);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Coord operator *(Coord coord, int multiplier) => new Coord(coord.fileIndex * multiplier, coord.rankIndex * multiplier);
     }
 
     public static class BoardHelper
@@ -57,11 +58,13 @@ namespace ChessApp
 
     public static class BitBoardUtility
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SetSquare(ref ulong bitboard, int squareIndex)
         {
             bitboard |= 1UL << squareIndex;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool ContainsSquare(ulong bitboard, int squareIndex)
         {
             return ((bitboard >> squareIndex) & 1) != 0;
@@ -78,83 +81,151 @@ namespace ChessApp
         public static readonly ulong[] BishopMagics = { 16509839532542417919, 14391803910955204223, 1848771770702627364, 347925068195328958, 5189277761285652493, 3750937732777063343, 18429848470517967340, 17870072066711748607, 16715520087474960373, 2459353627279607168, 7061705824611107232, 8089129053103260512, 7414579821471224013, 9520647030890121554, 17142940634164625405, 9187037984654475102, 4933695867036173873, 3035992416931960321, 15052160563071165696, 5876081268917084809, 1153484746652717320, 6365855841584713735, 2463646859659644933, 1453259901463176960, 9808859429721908488, 2829141021535244552, 576619101540319252, 5804014844877275314, 4774660099383771136, 328785038479458864, 2360590652863023124, 569550314443282, 17563974527758635567, 11698101887533589556, 5764964460729992192, 6953579832080335136, 1318441160687747328, 8090717009753444376, 16751172641200572929, 5558033503209157252, 17100156536247493656, 7899286223048400564, 4845135427956654145, 2368485888099072, 2399033289953272320, 6976678428284034058, 3134241565013966284, 8661609558376259840, 17275805361393991679, 15391050065516657151, 11529206229534274423, 9876416274250600448, 16432792402597134585, 11975705497012863580, 11457135419348969979, 9763749252098620046, 16960553411078512574, 15563877356819111679, 14994736884583272463, 9441297368950544394, 14537646123432199168, 9888547162215157388, 18140215579194907366, 18374682062228545019 };
     }
 
-    // Magic helper functions
+    // Optimized magic helper functions
     public static class MagicHelper
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong[] CreateAllBlockerBitboards(ulong movementMask)
         {
-            // Create a list of the indices of the bits that are set in the movement mask
-            List<int> moveSquareIndices = new();
-            for (int i = 0; i < 64; i++)
+            // Use bit manipulation to find set bits more efficiently
+            int bitCount = System.Numerics.BitOperations.PopCount(movementMask);
+            int[] moveSquareIndices = new int[bitCount];
+
+            int index = 0;
+            ulong mask = movementMask;
+            while (mask != 0)
             {
-                if (((movementMask >> i) & 1) == 1)
-                {
-                    moveSquareIndices.Add(i);
-                }
+                int bitIndex = System.Numerics.BitOperations.TrailingZeroCount(mask);
+                moveSquareIndices[index++] = bitIndex;
+                mask &= mask - 1; // Clear the lowest set bit
             }
 
-            // Calculate total number of different bitboards (one for each possible arrangement of pieces)
-            int numPatterns = 1 << moveSquareIndices.Count; // 2^n
+            int numPatterns = 1 << bitCount;
             ulong[] blockerBitboards = new ulong[numPatterns];
 
-            // Create all bitboards
+            // Generate all possible blocker patterns
             for (int patternIndex = 0; patternIndex < numPatterns; patternIndex++)
             {
-                for (int bitIndex = 0; bitIndex < moveSquareIndices.Count; bitIndex++)
+                ulong pattern = 0;
+                for (int bitIndex = 0; bitIndex < bitCount; bitIndex++)
                 {
-                    int bit = (patternIndex >> bitIndex) & 1;
-                    blockerBitboards[patternIndex] |= (ulong)bit << moveSquareIndices[bitIndex];
+                    if ((patternIndex & (1 << bitIndex)) != 0)
+                    {
+                        pattern |= 1UL << moveSquareIndices[bitIndex];
+                    }
                 }
+                blockerBitboards[patternIndex] = pattern;
             }
 
             return blockerBitboards;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong CreateMovementMask(int squareIndex, bool ortho)
         {
             ulong mask = 0;
-            Coord[] directions = ortho ? BoardHelper.RookDirections : BoardHelper.BishopDirections;
-            Coord startCoord = new Coord(squareIndex);
+            ReadOnlySpan<Coord> directions = ortho ?
+                new ReadOnlySpan<Coord>(BoardHelper.RookDirections) :
+                new ReadOnlySpan<Coord>(BoardHelper.BishopDirections);
 
-            foreach (Coord dir in directions)
+            int file = squareIndex & 7;
+            int rank = squareIndex >> 3;
+
+            // Unroll the direction loop for better performance
+            if (ortho)
             {
-                for (int dst = 1; dst < 8; dst++)
-                {
-                    Coord coord = startCoord + dir * dst;
-                    Coord nextCoord = startCoord + dir * (dst + 1);
-
-                    if (nextCoord.IsValidSquare())
-                    {
-                        BitBoardUtility.SetSquare(ref mask, coord.SquareIndex);
-                    }
-                    else { break; }
-                }
+                // North
+                for (int r = rank + 1; r < 7; r++) mask |= 1UL << (r * 8 + file);
+                // South  
+                for (int r = rank - 1; r > 0; r--) mask |= 1UL << (r * 8 + file);
+                // East
+                for (int f = file + 1; f < 7; f++) mask |= 1UL << (rank * 8 + f);
+                // West
+                for (int f = file - 1; f > 0; f--) mask |= 1UL << (rank * 8 + f);
             }
+            else
+            {
+                // Northeast
+                for (int d = 1; file + d < 7 && rank + d < 7; d++) mask |= 1UL << ((rank + d) * 8 + (file + d));
+                // Southeast
+                for (int d = 1; file + d < 7 && rank - d > 0; d++) mask |= 1UL << ((rank - d) * 8 + (file + d));
+                // Northwest
+                for (int d = 1; file - d > 0 && rank + d < 7; d++) mask |= 1UL << ((rank + d) * 8 + (file - d));
+                // Southwest
+                for (int d = 1; file - d > 0 && rank - d > 0; d++) mask |= 1UL << ((rank - d) * 8 + (file - d));
+            }
+
             return mask;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong LegalMoveBitboardFromBlockers(int startSquare, ulong blockerBitboard, bool ortho)
         {
             ulong bitboard = 0;
+            int file = startSquare & 7;
+            int rank = startSquare >> 3;
 
-            Coord[] directions = ortho ? BoardHelper.RookDirections : BoardHelper.BishopDirections;
-            Coord startCoord = new Coord(startSquare);
-
-            foreach (Coord dir in directions)
+            // Unrolled loops for better performance
+            if (ortho)
             {
-                for (int dst = 1; dst < 8; dst++)
+                // North
+                for (int r = rank + 1; r < 8; r++)
                 {
-                    Coord coord = startCoord + dir * dst;
-
-                    if (coord.IsValidSquare())
-                    {
-                        BitBoardUtility.SetSquare(ref bitboard, coord.SquareIndex);
-                        if (BitBoardUtility.ContainsSquare(blockerBitboard, coord.SquareIndex))
-                        {
-                            break;
-                        }
-                    }
-                    else { break; }
+                    int square = r * 8 + file;
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
+                }
+                // South
+                for (int r = rank - 1; r >= 0; r--)
+                {
+                    int square = r * 8 + file;
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
+                }
+                // East
+                for (int f = file + 1; f < 8; f++)
+                {
+                    int square = rank * 8 + f;
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
+                }
+                // West
+                for (int f = file - 1; f >= 0; f--)
+                {
+                    int square = rank * 8 + f;
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
+                }
+            }
+            else
+            {
+                // Northeast
+                for (int d = 1; file + d < 8 && rank + d < 8; d++)
+                {
+                    int square = (rank + d) * 8 + (file + d);
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
+                }
+                // Southeast
+                for (int d = 1; file + d < 8 && rank - d >= 0; d++)
+                {
+                    int square = (rank - d) * 8 + (file + d);
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
+                }
+                // Northwest
+                for (int d = 1; file - d >= 0 && rank + d < 8; d++)
+                {
+                    int square = (rank + d) * 8 + (file - d);
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
+                }
+                // Southwest
+                for (int d = 1; file - d >= 0 && rank - d >= 0; d++)
+                {
+                    int square = (rank - d) * 8 + (file - d);
+                    bitboard |= 1UL << square;
+                    if ((blockerBitboard & (1UL << square)) != 0) break;
                 }
             }
 
@@ -165,79 +236,108 @@ namespace ChessApp
     // Main Magic class with exposed attack tables
     public static class Magic
     {
-        // Rook and bishop mask bitboards for each origin square.
-        // A mask is simply the legal moves available to the piece from the origin square
-        // (on an empty board), except that the moves stop 1 square before the edge of the board.
-        public static readonly ulong[] RookMask;
-        public static readonly ulong[] BishopMask;
+        // Static readonly arrays for better cache locality
+        public static readonly ulong[] RookMask = new ulong[64];
+        public static readonly ulong[] BishopMask = new ulong[64];
 
-        // Exposed attack tables - these are what you requested
+        // Flattened arrays for better cache performance
+        public static readonly ulong[] RookAttacksFlat;
+        public static readonly ulong[] BishopAttacksFlat;
+
+        // Offset arrays to index into flattened arrays
+        public static readonly int[] RookOffsets = new int[64];
+        public static readonly int[] BishopOffsets = new int[64];
+
+        // Traditional 2D arrays for compatibility
+        public static readonly ulong[][] RookAttacks = new ulong[64][];
+        public static readonly ulong[][] BishopAttacks = new ulong[64][];
+
+        // Alternative names for compatibility
         public static readonly ulong[][] rookAttacks;
         public static readonly ulong[][] bishopAttacks;
 
-        // Alternative names for compatibility with original code
-        public static readonly ulong[][] RookAttacks;
-        public static readonly ulong[][] BishopAttacks;
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong GetSliderAttacks(int square, ulong blockers, bool ortho)
         {
             return ortho ? GetRookAttacks(square, blockers) : GetBishopAttacks(square, blockers);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong GetRookAttacks(int square, ulong blockers)
         {
             ulong key = ((blockers & RookMask[square]) * PrecomputedMagics.RookMagics[square]) >> PrecomputedMagics.RookShifts[square];
-            return RookAttacks[square][key];
+            return RookAttacksFlat[(ulong)RookOffsets[square] + key];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong GetBishopAttacks(int square, ulong blockers)
         {
             ulong key = ((blockers & BishopMask[square]) * PrecomputedMagics.BishopMagics[square]) >> PrecomputedMagics.BishopShifts[square];
-            return BishopAttacks[square][key];
+            return BishopAttacksFlat[(ulong)BishopOffsets[square] + key];
         }
 
         static Magic()
         {
-            RookMask = new ulong[64];
-            BishopMask = new ulong[64];
-
+            // Initialize masks
             for (int squareIndex = 0; squareIndex < 64; squareIndex++)
             {
                 RookMask[squareIndex] = MagicHelper.CreateMovementMask(squareIndex, true);
                 BishopMask[squareIndex] = MagicHelper.CreateMovementMask(squareIndex, false);
             }
 
-            RookAttacks = new ulong[64][];
-            BishopAttacks = new ulong[64][];
+            // Calculate total sizes for flattened arrays
+            int rookTotalSize = 0;
+            int bishopTotalSize = 0;
 
             for (int i = 0; i < 64; i++)
             {
-                RookAttacks[i] = CreateTable(i, true, PrecomputedMagics.RookMagics[i], PrecomputedMagics.RookShifts[i]);
-                BishopAttacks[i] = CreateTable(i, false, PrecomputedMagics.BishopMagics[i], PrecomputedMagics.BishopShifts[i]);
+                RookOffsets[i] = rookTotalSize;
+                BishopOffsets[i] = bishopTotalSize;
+
+                int rookBits = 64 - PrecomputedMagics.RookShifts[i];
+                int bishopBits = 64 - PrecomputedMagics.BishopShifts[i];
+
+                rookTotalSize += 1 << rookBits;
+                bishopTotalSize += 1 << bishopBits;
+            }
+
+            // Allocate flattened arrays
+            RookAttacksFlat = new ulong[rookTotalSize];
+            BishopAttacksFlat = new ulong[bishopTotalSize];
+
+            // Initialize tables
+            for (int i = 0; i < 64; i++)
+            {
+                RookAttacks[i] = CreateTable(i, true, PrecomputedMagics.RookMagics[i], PrecomputedMagics.RookShifts[i], RookAttacksFlat, RookOffsets[i]);
+                BishopAttacks[i] = CreateTable(i, false, PrecomputedMagics.BishopMagics[i], PrecomputedMagics.BishopShifts[i], BishopAttacksFlat, BishopOffsets[i]);
             }
 
             // Set the exposed arrays to reference the same data
             rookAttacks = RookAttacks;
             bishopAttacks = BishopAttacks;
+        }
 
-            ulong[] CreateTable(int square, bool rook, ulong magic, int leftShift)
+        private static ulong[] CreateTable(int square, bool rook, ulong magic, int leftShift, ulong[] flatArray, int offset)
+        {
+            int numBits = 64 - leftShift;
+            int lookupSize = 1 << numBits;
+
+            // Create a view into the flattened array
+            var tableSpan = new Span<ulong>(flatArray, offset, lookupSize);
+            ulong[] table = new ulong[lookupSize];
+
+            ulong movementMask = MagicHelper.CreateMovementMask(square, rook);
+            ulong[] blockerPatterns = MagicHelper.CreateAllBlockerBitboards(movementMask);
+
+            foreach (ulong pattern in blockerPatterns)
             {
-                int numBits = 64 - leftShift;
-                int lookupSize = 1 << numBits;
-                ulong[] table = new ulong[lookupSize];
-
-                ulong movementMask = MagicHelper.CreateMovementMask(square, rook);
-                ulong[] blockerPatterns = MagicHelper.CreateAllBlockerBitboards(movementMask);
-
-                foreach (ulong pattern in blockerPatterns)
-                {
-                    ulong index = (pattern * magic) >> leftShift;
-                    ulong moves = MagicHelper.LegalMoveBitboardFromBlockers(square, pattern, rook);
-                    table[index] = moves;
-                }
-
-                return table;
+                ulong index = (pattern * magic) >> leftShift;
+                ulong moves = MagicHelper.LegalMoveBitboardFromBlockers(square, pattern, rook);
+                tableSpan[(int)index] = moves;
+                table[index] = moves;
             }
+
+            return table;
         }
     }
 }

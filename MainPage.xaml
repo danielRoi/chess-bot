@@ -160,6 +160,7 @@
             <Label x:Name="MoveCountLabel" Text="Move: 1" FontSize="12" TextColor="Black"/>
             <Label x:Name="TimeLabel" Text="Time: 00:00" FontSize="12" TextColor="Black"/>
             <Label x:Name="MovesEvaluetedLabel" Text="Moves Evalueted: 0" FontSize="12" TextColor="Black"/>
+            <Label x:Name="DepthLabel" Text="Depth: 0" FontSize="12" TextColor="Black"/>
         </StackLayout>
 
     </Grid>

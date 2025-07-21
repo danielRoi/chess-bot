@@ -22,7 +22,7 @@ namespace ChessApp.Logic
         private const int KingValue = 20000;
         #endregion
         public static int movesEvalueted = 0;
-
+        public static int depth = 0;
         // --- Piece-Square Tables (PST) ---
         // These tables assign a score bonus/penalty based on a piece's position.
         // Scores are from white's perspective. Black's scores are derived by flipping the board.
@@ -101,16 +101,15 @@ namespace ChessApp.Logic
         public static int FindBestMoveWithTime(TimeSpan timeLimit, bool whiteTurn)
         {
             movesEvalueted = 0;
-
             int bestMove = 0;
             DateTime startTime = DateTime.Now;
 
             // Use iterative deepening with time control
-            for (int depth = 1; depth <= 8; depth++)
+            for (depth = 1; depth <= 8; depth++)
             {
                 // Check if we have time for another iteration
                 var elapsed = DateTime.Now - startTime;
-                if (elapsed.TotalMilliseconds > timeLimit.TotalMilliseconds * 0.75)
+                if (elapsed.TotalMilliseconds > timeLimit.TotalMilliseconds * 0.5)
                     break;
 
                 try

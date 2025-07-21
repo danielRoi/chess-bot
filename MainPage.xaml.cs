@@ -28,8 +28,9 @@ namespace ChessApp
         double currentBoardSize = 400;
 
         // Time controls
-        TimeSpan whiteTimeRemaining = TimeSpan.FromMinutes(10); // Default 10 minutes
-        TimeSpan blackTimeRemaining = TimeSpan.FromMinutes(10);
+        static int gameClockInMinutes = 100;
+        TimeSpan whiteTimeRemaining = TimeSpan.FromMinutes(gameClockInMinutes); // Default 10 minutes
+        TimeSpan blackTimeRemaining = TimeSpan.FromMinutes(gameClockInMinutes);
         TimeSpan timeIncrement = TimeSpan.FromSeconds(0); // Increment per move
         DateTime moveStartTime;
         bool clockRunning = false;
@@ -78,8 +79,6 @@ namespace ChessApp
         {
             if (!clockRunning || !gameInProgress) return;
 
-            var elapsed = DateTime.Now - moveStartTime;
-
             if (whiteTurn)
             {
                 whiteTimeRemaining -= TimeSpan.FromMilliseconds(100);
@@ -87,6 +86,7 @@ namespace ChessApp
 
                 if (whiteTimeRemaining <= TimeSpan.Zero)
                 {
+                    clearAllHighlights();
                     whiteTimeRemaining = TimeSpan.Zero;
                     clockRunning = false;
                     gameInProgress = false;
@@ -100,6 +100,7 @@ namespace ChessApp
 
                 if (blackTimeRemaining <= TimeSpan.Zero)
                 {
+                    clearAllHighlights();
                     blackTimeRemaining = TimeSpan.Zero;
                     clockRunning = false;
                     gameInProgress = false;
@@ -430,8 +431,8 @@ namespace ChessApp
 
             // Calculate available time for the bot
             TimeSpan availableTime = whiteTurn ? whiteTimeRemaining : blackTimeRemaining;
-            // Use a fraction of available time (e.g., 5% of remaining time, min 1 second, max 30 seconds)
-            double thinkTimeSeconds = Math.Max(1.0, Math.Min(15.0, availableTime.TotalSeconds * 0.05));
+            // Use a fraction of available time (e.g., 5% of remaining time, min 1 second, max 100 seconds)
+            double thinkTimeSeconds = Math.Max(1.0, Math.Min(100, availableTime.TotalSeconds * 0.05));
 
             var botMove = await Task.Run(() => Engine.FindBestMoveWithTime(TimeSpan.FromSeconds(thinkTimeSeconds), whiteTurn));
 
@@ -453,6 +454,7 @@ namespace ChessApp
             StatusLabel.Text = "Ready to play";
             CheckGameEnd();
             MovesEvaluetedLabel.Text = $"Moves Evalueted: {Engine.movesEvalueted}";
+            DepthLabel.Text = $"Depth: {Engine.depth}";
         }
 
         private void UpdateGameStatus()
@@ -535,8 +537,8 @@ namespace ChessApp
         private async void StartNewGame(object sender, EventArgs e)
         {
             // Reset time controls
-            whiteTimeRemaining = TimeSpan.FromMinutes(10); // You might want to make this configurable
-            blackTimeRemaining = TimeSpan.FromMinutes(10);
+            whiteTimeRemaining = TimeSpan.FromMinutes(gameClockInMinutes); // You might want to make this configurable
+            blackTimeRemaining = TimeSpan.FromMinutes(gameClockInMinutes);
             WhiteTimeLabel.Text = FormatTime(whiteTimeRemaining);
             BlackTimeLabel.Text = FormatTime(blackTimeRemaining);
 
