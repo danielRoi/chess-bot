@@ -22,12 +22,12 @@ namespace ChessApp
         bool whiteTurn = true;
         bool whiteIsBot = false;
         bool blackIsBot = false;
-        bool gameInProgress = false; // New: Track if game is active
+        bool gameInProgress = false;
         bool boardFlipped = false;
         bool autoSize = true;
         double currentBoardSize = 400;
 
-        // Time controls - New
+        // Time controls
         TimeSpan whiteTimeRemaining = TimeSpan.FromMinutes(10); // Default 10 minutes
         TimeSpan blackTimeRemaining = TimeSpan.FromMinutes(10);
         TimeSpan timeIncrement = TimeSpan.FromSeconds(0); // Increment per move
@@ -363,7 +363,9 @@ namespace ChessApp
 
         void movePiece(int sr, int sc, int row, int col, ChessLogic.Piece promotedPiece)
         {
+            clearAllHighlights();
             int res = ChessLogic.MovePiece(sr, sc, row, col, promotedPiece);
+            HighlightSquare(row,col,true, false);
 
             Dictionary<ChessLogic.Piece, string> pieceToString = new Dictionary<ChessLogic.Piece, string>
             {
