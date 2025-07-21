@@ -450,6 +450,7 @@ namespace ChessApp
             AddTimeIncrement();
             StatusLabel.Text = "Ready to play";
             CheckGameEnd();
+            MovesEvaluetedLabel.Text = $"Moves Evalueted: {Engine.movesEvalueted}";
         }
 
         private void UpdateGameStatus()

@@ -159,7 +159,7 @@
             <Label x:Name="StatusLabel" Text="Ready to play" FontSize="12" TextColor="Black"/>
             <Label x:Name="MoveCountLabel" Text="Move: 1" FontSize="12" TextColor="Black"/>
             <Label x:Name="TimeLabel" Text="Time: 00:00" FontSize="12" TextColor="Black"/>
-            <Label x:Name="MovesEvalueted" Text="Moves Evalueted: 0" FontSize="12" TextColor="Black"/>
+            <Label x:Name="MovesEvaluetedLabel" Text="Moves Evalueted: 0" FontSize="12" TextColor="Black"/>
         </StackLayout>
 
     </Grid>

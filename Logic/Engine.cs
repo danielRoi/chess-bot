@@ -21,6 +21,7 @@ namespace ChessApp.Logic
         private const int QueenValue = 900;
         private const int KingValue = 20000;
         #endregion
+        public static int movesEvalueted = 0;
 
         // --- Piece-Square Tables (PST) ---
         // These tables assign a score bonus/penalty based on a piece's position.
@@ -99,6 +100,8 @@ namespace ChessApp.Logic
         /// </summary>
         public static int FindBestMoveWithTime(TimeSpan timeLimit, bool whiteTurn)
         {
+            movesEvalueted = 0;
+
             int bestMove = 0;
             DateTime startTime = DateTime.Now;
 
@@ -263,6 +266,8 @@ namespace ChessApp.Logic
         /// </summary>
         public static int Evaluate(bool whiteTurn)
         {
+            movesEvalueted++;
+
             int score = 0;
 
             // Material and positional evaluation
