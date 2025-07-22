@@ -38,6 +38,14 @@ namespace ChessApp
         private static readonly ulong[] KnightMoves = new ulong[64];
         private static readonly ulong[] KingMoves = new ulong[64];
 
+
+        private const int MaxUndoStates = 1024;
+        private static readonly UndoState[] undoStack = new UndoState[MaxUndoStates];
+        private static int undoIndex = 0;
+
+        private static int halfmoveClock = 0;
+        private static int fullmoveNumber = 1;
+
         // a tiny struct to hold all our bitboards
         private struct UndoState
         {
@@ -45,33 +53,37 @@ namespace ChessApp
             public ulong BP, BN, BB, BR, BQ, BK;
             public int castleData;
             public ulong enPassantSquare;
+            public int halfmoveClock;    // ADD this line
+            public int fullmoveNumber;   // ADD this line
         }
-
-        private const int MaxUndoStates = 1024;
-        private static readonly UndoState[] undoStack = new UndoState[MaxUndoStates];
-        private static int undoIndex = 0;
 
         public static void PushState()
         {
-            // get a direct ref to the next slot
             ref UndoState dst = ref undoStack[undoIndex++];
 
-            // copy board state into it
             dst.WP = WP; dst.WN = WN; dst.WB = WB; dst.WR = WR; dst.WQ = WQ; dst.WK = WK;
             dst.BP = BP; dst.BN = BN; dst.BB = BB; dst.BR = BR; dst.BQ = BQ; dst.BK = BK;
             dst.castleData = castleData;
             dst.enPassantSquare = enPassantSquare;
+            dst.halfmoveClock = halfmoveClock;     
+            dst.fullmoveNumber = fullmoveNumber;   
+
+            // Push to Zobrist history
+            //ulong hash = ZobristHash.ComputeHash(true, castleData, enPassantSquare);
+            //ZobristHash.PushPosition(hash, halfmoveClock);
         }
         public static void PopState()
         {
-            // move index back, then grab slot by ref
             ref readonly UndoState src = ref undoStack[--undoIndex];
 
-            // restore board state
             WP = src.WP; WN = src.WN; WB = src.WB; WR = src.WR; WQ = src.WQ; WK = src.WK;
             BP = src.BP; BN = src.BN; BB = src.BB; BR = src.BR; BQ = src.BQ; BK = src.BK;
             castleData = src.castleData;
             enPassantSquare = src.enPassantSquare;
+            halfmoveClock = src.halfmoveClock;    
+            fullmoveNumber = src.fullmoveNumber;  
+
+            //ZobristHash.PopPosition(); 
         }
 
         static ChessLogic()
@@ -96,6 +108,9 @@ namespace ChessApp
             WQ = 0x0800000000000000UL;
             BK = 0x0000000000000010UL;
             WK = 0x1000000000000000UL;
+
+            halfmoveClock = 0;    
+            fullmoveNumber = 1;   
         }
 
         /// <summary>
@@ -160,6 +175,17 @@ namespace ChessApp
             int tSq = tr * 8 + tc;
             ulong fromBB = 1UL << fSq;
             ulong toBB = 1UL << tSq;
+
+            bool isPawnMove = ((1UL << (fr * 8 + fc)) & (WP | BP)) != 0;
+            bool isCapture = ((1UL << (tr * 8 + tc)) & (WhiteAll | BlackAll)) != 0;
+
+            // Reset halfmove clock on pawn move or capture
+            if (isPawnMove || isCapture)
+                halfmoveClock = 0;
+            else
+                halfmoveClock++;
+            
+            fullmoveNumber++;
 
             #region enPassant
             //check for en passant capture
@@ -513,6 +539,8 @@ namespace ChessApp
                 enPassantSquare = 1UL << (rank * 8 + file);
             }
 
+            halfmoveClock = parts.Length > 4 ? int.Parse(parts[4]) : 0;
+            fullmoveNumber = parts.Length > 5 ? int.Parse(parts[5]) : 1;
         }
 
         public static string GetFENFromCurrentPosition(bool whiteTurn)
@@ -566,9 +594,6 @@ namespace ChessApp
                 int epIdx = BitOperations.TrailingZeroCount(enPassantSquare);
                 ep = $"{(char)('a' + epIdx % 8)}{1 + epIdx / 8}";
             }
-
-            int halfmoveClock = 0;   // Replace with your actual value
-            int fullmoveNumber = 1;  // Replace with your actual value
 
             return $"{string.Join("/", boardRows)} {(whiteTurn ? "w" : "b")} {castling} {ep} {halfmoveClock} {fullmoveNumber}";
         }
@@ -729,12 +754,14 @@ namespace ChessApp
             return nodes;
         }
 
+
+        private static bool IsDrawByRepetition() => halfmoveClock >= 100;
         //check whether the player has more moves to play
         public static bool isGameOver(bool whiteTurn)
         {
             // If the player has no moves left, it's a stalemate or checkmate
             Span<int> moves = stackalloc int[256];
-            return GetAllAvailableMoves(whiteTurn, moves) == 0;
+            return GetAllAvailableMoves(whiteTurn, moves) == 0 || IsDrawByRepetition();
         }
         public static void PerftWithLogging(int depth, bool whiteTurn, string outputPath)
         {

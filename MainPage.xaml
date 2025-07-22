@@ -108,7 +108,7 @@
                                 BackgroundColor="DarkRed" TextColor="White"/>
                         <Button Text="Copy Position" Clicked="copyPosition"
                                 BackgroundColor="DarkBlue" TextColor="White"/>
-                        <Button Text="Reset to Start" Clicked="ResetToStartPosition"
+                        <Button Text="Start Game" Clicked="StartGame"
                                 BackgroundColor="DarkGreen" TextColor="White"/>
                     </StackLayout>
                 </Frame>

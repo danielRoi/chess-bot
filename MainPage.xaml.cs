@@ -574,10 +574,22 @@ namespace ChessApp
             StatusLabel.Text = "Undo not yet implemented";
         }
 
-        private async void ResetToStartPosition(object sender, EventArgs e)
+        private async void StartGame(object sender, EventArgs e)
         {
-            UserInput.Text = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-            orderInFenNotation(sender, e);
+            moveCount = 1;
+            gameStartTime = DateTime.Now;
+            gameInProgress = true;
+            _selected = null;
+            clearAllHighlights();
+            UpdateGameStatus();
+            StatusLabel.Text = "New game started";
+
+            StartClock(); // Start the clock for the new game
+
+            if ((whiteTurn && whiteIsBot) || (!whiteTurn && blackIsBot))
+            {
+                await playBotAsync();
+            }
         }
 
         // Existing methods (kept from original code)
